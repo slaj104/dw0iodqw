@@ -94,6 +94,22 @@ details.full summary { color: var(--muted); font-size: 0.85rem; cursor: pointer;
 .arttext { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 7px; font-size: 0.95rem; word-break: keep-all; overflow-wrap: anywhere; }
 .arttext p { margin: 0; }
 .arttext p.sub { padding-left: 1.2em; }
+.xref { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; }
+.xref.open { background: var(--accent-soft); border-radius: 3px; }
+.refbox { border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 0 8px 8px 0; padding: 8px 12px; display: grid; gap: 4px; font-size: 0.9rem; min-width: 0; }
+.refbox .rh, .linked .rh { font-weight: 700; font-size: 0.82rem; color: var(--accent); }
+.refbox p { margin: 0; }
+.refbox p.dim { color: var(--muted); }
+.linked { border-top: 1px dashed var(--line); padding-top: 10px; display: grid; gap: 10px; min-width: 0; }
+.bylbox { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; min-width: 0; }
+.bylbox summary { cursor: pointer; font-weight: 600; font-size: 0.88rem; color: var(--warn); }
+img.byl { display: block; max-width: 100%; height: auto; background: #FFFFFF; margin-top: 6px; cursor: zoom-in; }
+img.byl.zoom { max-width: none; width: 760px; cursor: zoom-out; }
+.bylbox .hint { margin-top: 4px; }
+.subnote { font-size: 0.8rem; color: var(--warn); font-weight: 600; }
+.ref .law.sublaw { color: var(--warn); }
+.navrow { border-top: 1px solid var(--line); padding-top: 12px; }
+.navrow .grow { flex: 1; }
 .figwrap { display: block; overflow-x: auto; max-width: 100%; }
 img.fig { display: block; max-width: none; height: auto; background: #FFFFFF; border: 1px solid var(--line); border-radius: 6px; padding: 4px; margin-block: 2px; }
 b.key { color: var(--accent); background: var(--accent-soft); border-radius: 4px; padding: 0 3px; font-weight: 700; }
@@ -259,6 +275,7 @@ h2 { font-size: 1rem; margin: 0; }
   let FIG = {};
   const figs = (h) => h.replace(/\{\{그림:(\d+)\}\}/g, (m, n) => (FIG[n] ? '<span class="figwrap"><img class="fig" loading="lazy" src="' + FIG[n].src + '" alt="' + esc(FIG[n].alt) + '"></span>' : ""));
   const figText = (s) => s.replace(/\{\{그림:(\d+)\}\}/g, (m, n) => (FIG[n] ? "[표: " + FIG[n].alt.replace(/\s+/g, " ") + "]" : ""));
+  let BYL = {}, EXT = {}, COURSES = [];
   let LAWS = [], LAWBY = {}, ARTS = [], BYID = {}, TERMS = [], UNITS = [], UNITBY = {}, COURSE = [];
   let active = new Set();
 
@@ -336,7 +353,7 @@ h2 { font-size: 1rem; margin: 0; }
     for (const x of same.concat(other)) { if (!picks.includes(x.term)) picks.push(x.term); if (picks.length === 3) break; }
     return shuffle([t.term].concat(picks));
   }
-  function maskTerm(t) { return t.def.split(t.term).join("○○"); }
+  function maskTerm(t) { return t.def.split(t.term).join("○○").replace(/\n/g, " "); }
 
   // ---------- 복습 일정 ----------
   const st = (id) => S.arts[id] || null;
@@ -373,22 +390,105 @@ h2 { font-size: 1rem; margin: 0; }
     return h + "</span>";
   }
   const pendTag = (a) => (a.pending ? '<span class="tag" title="이 날짜부터 시행되는 개정 내용이 반영되어 있습니다">' + esc(a.pending.slice(2).replace(/-/g, ".")) + " 시행 예정</span>" : "");
-  const refHtml = (a) => '<div class="ref"><span class="law">' + esc(a.law.short) + '</span><span class="no">' + esc(a.no) + "</span><span>" + esc(a.title) + pendTag(a) + "</span>" + lamps(a.id) + "</div>";
+  const isSub = (a) => a.law && (a.law.id === "dec" || a.law.id === "rule");
+  const refHtml = (a) => '<div class="ref"><span class="law' + (isSub(a) ? " sublaw" : "") + '">' + esc(a.law.short) + '</span><span class="no">' + esc(a.no) + "</span><span>" + esc(a.title) + pendTag(a) + "</span>" + lamps(a.id) + "</div>";
   const subLine = (l) => /^([가-하]\.|\d+\)|\(\d+\))\s/.test(l);
   function lineHtml(l, ranges) {
     if (!ranges || !ranges.length) return esc(l);
     let h = "", pos = 0;
-    ranges.slice().sort((x, y) => x.s - y.s).forEach((r) => { if (r.s < pos) return; h += esc(l.slice(pos, r.s)) + r.open + esc(l.slice(r.s, r.e)) + r.close; pos = r.e; });
+    ranges.slice().sort((x, y) => x.s - y.s || (y.p || 0) - (x.p || 0)).forEach((r) => { if (r.s < pos) return; h += esc(l.slice(pos, r.s)) + r.open + esc(l.slice(r.s, r.e)) + r.close; pos = r.e; });
     return h + esc(l.slice(pos));
+  }
+  // ---------- 다른 조문 연결 ----------
+  const REFREG = [];
+  const CIRC = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳";
+  const isHang = (l) => CIRC.includes(l[0]);
+  const isHo = (l) => /^\d+(의\d+)?\.\s/.test(l);
+  function pickLines(lines, hang, ho) {
+    let seg = lines;
+    if (hang) {
+      const st = lines.findIndex((l) => l[0] === CIRC[+hang - 1]);
+      if (st >= 0) { let en = lines.findIndex((l, k) => k > st && isHang(l)); seg = lines.slice(st, en < 0 ? undefined : en); }
+    }
+    if (ho) {
+      const re = new RegExp("^" + ho + "\\.\\s");
+      const st = seg.findIndex((l) => re.test(l));
+      if (st >= 0) {
+        const en = seg.findIndex((l, k) => k > st && (isHo(l) || isHang(l)));
+        return { lead: st > 0 ? seg[0] : "", lines: seg.slice(st, en < 0 ? undefined : en) };
+      }
+    }
+    return { lead: "", lines: seg };
+  }
+  function resolveRef(r) {
+    const [, , , tgt, jo, hang, ho] = r;
+    if (tgt === "b") {
+      const b = BYL[jo];
+      return b ? { head: "[별표 " + b.no + "] " + b.title, html: bylImgs(b) } : null;
+    }
+    let lawName, art;
+    if (tgt.startsWith("x:")) {
+      const e = EXT[tgt.slice(2)];
+      const x = e && e.arts[jo];
+      if (!x) return null;
+      lawName = e.name; art = { no: jo, title: x[0], lines: x[1] };
+    } else {
+      const law = LAWBY[tgt];
+      art = law && law.list.find((a) => a.no === jo);
+      if (!art) return null;
+      lawName = law.name;
+    }
+    const p = pickLines(art.lines, hang, ho);
+    const head = lawName + " " + jo + (hang ? "제" + hang + "항" : "") + (ho ? "제" + ho + "호" : "") + (art.title ? " (" + art.title + ")" : "");
+    return { head, text: (p.lead ? p.lead + "\n" : "") + p.lines.join("\n"),
+      html: (p.lead ? '<p class="dim">' + figs(esc(p.lead)) + "</p>" : "") + p.lines.map((l) => '<p class="' + (subLine(l) ? "sub" : "") + '">' + figs(esc(l)) + "</p>").join("") };
+  }
+  function bylImgs(b) { return '<div class="hint">표를 누르면 크게 보입니다. 다시 누르면 화면에 맞춥니다.</div>' + b.imgs.map((src) => '<span class="figwrap"><img class="byl" loading="lazy" src="' + src + '" alt="별표 ' + esc(b.no) + " " + esc(b.title) + '"></span>').join(""); }
+  document.addEventListener("click", (e) => { const im = e.target.closest("img.byl"); if (im) im.classList.toggle("zoom"); });
+  function refRanges(a, i) {
+    return (a.refs || []).filter((r) => r[0] === i).map((r) => ({ s: r[1], e: r[2], p: 2, open: '<button type="button" class="xref" data-ref="' + (REFREG.push(r) - 1) + '">', close: "</button>" }));
   }
   function fullText(a, opts) {
     opts = opts || {};
     return '<div class="arttext">' + a.lines.map((l, i) => {
-      let ranges = [];
-      if (opts.keys) ranges = candidates(a).filter((c) => c.li === i).map((c) => ({ s: c.s, e: c.e, open: '<b class="key">', close: "</b>" }));
-      if (opts.hl && opts.hl.li === i) ranges = [{ s: opts.hl.s, e: opts.hl.e, open: "<mark>", close: "</mark>" }];
+      let ranges = refRanges(a, i);
+      if (opts.keys && a.kind === "art") ranges = ranges.concat(candidates(a).filter((c) => c.li === i).map((c) => ({ s: c.s, e: c.e, p: 1, open: '<b class="key">', close: "</b>" })));
+      if (opts.hl && opts.hl.li === i) ranges = ranges.concat([{ s: opts.hl.s, e: opts.hl.e, p: 3, open: "<mark>", close: "</mark>" }]);
+      if (opts.q) { let k = -1; while ((k = l.indexOf(opts.q, k + 1)) >= 0) ranges.push({ s: k, e: k + opts.q.length, p: 3, open: "<mark>", close: "</mark>" }); }
       return '<p class="' + (subLine(l) ? "sub" : "") + '">' + figs(lineHtml(l, ranges)) + "</p>";
     }).join("") + "</div>";
+  }
+  // 조문이 언급한 별표는 조문 아래에 바로 펼쳐 보여 준다
+  function attachedByl(a, open) {
+    const keys = [...new Set((a.refs || []).filter((r) => r[3] === "b").map((r) => r[4]))].filter((k) => BYL[k]);
+    return keys.map((k) => '<details class="bylbox"' + (open ? " open" : "") + '><summary>[별표 ' + esc(BYL[k].no) + "] " + esc(BYL[k].title) + "</summary>" + bylImgs(BYL[k]) + "</details>").join("");
+  }
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest(".xref");
+    if (!b) return;
+    const host = b.closest("p") || b.parentElement;
+    const id = b.dataset.ref;
+    const nxt = host.nextElementSibling;
+    if (nxt && nxt.classList.contains("refbox") && nxt.dataset.for === id) { nxt.remove(); b.classList.remove("open"); return; }
+    const res = resolveRef(REFREG[+id]);
+    const box = document.createElement("div");
+    box.className = "refbox";
+    box.dataset.for = id;
+    box.innerHTML = res ? '<div class="rh">' + esc(res.head) + "</div>" + res.html : '<div class="hint">이 조문은 앱에 들어 있지 않습니다.</div>';
+    host.after(box);
+    b.classList.add("open");
+  });
+  function refContext(it) {
+    const seen = new Set(), out = [];
+    (it.refs || []).forEach((r) => {
+      if (r[3] === "b" || out.length >= 4) return;
+      const k = r.slice(3).join("|");
+      if (seen.has(k)) return;
+      seen.add(k);
+      const res = resolveRef(r);
+      if (res && res.text) out.push("[참고: " + res.head + "] " + figText(res.text).slice(0, 400));
+    });
+    return out.length ? "\n\n" + out.join("\n") : "";
   }
 
   // ---------- 쉽게 풀어 설명 (Claude) ----------
@@ -405,8 +505,9 @@ h2 { font-size: 1rem; margin: 0; }
       "마크다운 기호(#, *, **) 없이 일반 텍스트로, 아래 형식을 지켜 한국어로 500자 안쪽으로 답해라.\n" +
       "한 줄 요약: (한 문장)\n쉬운 풀이: (3~5문장. 어려운 낱말은 괄호 안에 쉬운 말로 풀이)\n현장 예시: (지하철 기관사 상황을 가정한 1~2문장. 가정이라는 것이 드러나게)\n" +
       "시험 포인트:\n- (외워야 할 숫자·기간·주체·조건 2~4개)\n외우는 요령: (한 문장)\n원문에 없는 규정은 지어내지 마라.\n\n";
-    if (it.kind === "term") return head + "[출처] " + it.law.name + " " + it.art.no + "(정의)\n[용어] " + it.term + "\n[뜻] " + it.def;
-    return head + "[법령] " + it.law.name + "\n[조문] " + it.no + "(" + it.title + ")\n" + figText(it.lines.join("\n"));
+    if (it.kind === "term") return head + "[출처] " + it.law.name + " " + it.art.no + "(정의)\n[용어] " + it.term + "\n[뜻] " + it.def + refContext(it) +
+      it.links.map((a) => "\n[이 용어를 구체화한 규정: " + a.law.name + " " + a.no + "(" + a.title + ")] " + figText(a.lines.join(" ")).slice(0, 600)).join("");
+    return head + "[법령] " + it.law.name + "\n[조문] " + it.no + "(" + it.title + ")\n" + figText(it.lines.join("\n")) + refContext(it);
   }
   async function runExplain(key, box) {
     const out = $(".out", box), btn = $("button", box);
@@ -449,14 +550,14 @@ h2 { font-size: 1rem; margin: 0; }
     const first = doneCount === 0;
     let h = '<div class="card intro">' +
       (first
-        ? '<h2>처음부터 차근차근</h2><ol><li>단원 하나는 조문 5개 이하로, 10분 안팎이면 끝납니다.</li><li>먼저 조문을 읽습니다. <b class="key">파란 글자</b>가 시험에 나오는 숫자·용어입니다. 어려우면 ‘쉽게 풀어 설명 듣기’를 누르세요.</li><li>읽은 직후 바로 확인 문제를 풉니다. 틀린 조문은 ‘복습 퀴즈’에 다시 나옵니다.</li><li>법마다 용어 익히기부터 시작합니다. 순서는 철도안전법 → 도시철도운전규칙 → 철도차량운전규칙 → 광역철도세칙 → 시행령 → 시행규칙입니다.</li></ol>'
+        ? '<h2>처음부터 차근차근</h2><ol><li>단원 하나는 10분 안팎이면 끝납니다. 조문을 읽고 바로 확인 문제를 풉니다.</li><li><b class="key">파란 글자</b>는 시험에 나오는 숫자·용어입니다. <button type="button" class="xref" tabindex="-1">밑줄 친 조문 번호</button>를 누르면 그 조문 내용이 바로 아래에 펼쳐집니다.</li><li>철도안전법은 법 조문 다음에 그 조문을 구체화한 시행령·시행규칙과 기준표(별표)가 바로 이어집니다.</li><li>어려우면 ‘쉽게 풀어 설명 듣기’를 누르세요. 틀린 조문은 ‘복습 퀴즈’에 다시 나옵니다.</li></ol>'
         : '<h2>이어서 배우기</h2><div class="hint">단원 ' + doneCount + "/" + UNITS.length + " 완료 · 매일 ‘복습 퀴즈’도 함께 푸세요.</div>") +
-      (nu ? '<button class="btn primary wide" data-unit="' + nu.id + '">' + (first ? "첫 단원 시작: " : "다음 단원: ") + esc(nu.law.short) + " · " + esc(nu.title) + "</button>" : '<div class="verdict ok">모든 단원을 끝냈습니다. 이제 복습 퀴즈로 다지세요.</div>') +
+      (nu ? '<button class="btn primary wide" data-unit="' + nu.id + '">' + (first ? "첫 단원 시작: " : "다음 단원: ") + esc(nu.course.short) + " · " + esc(nu.title) + "</button>" : '<div class="verdict ok">모든 단원을 끝냈습니다. 이제 복습 퀴즈로 다지세요.</div>') +
       "</div>";
-    LAWS.forEach((law) => {
-      const us = UNITS.filter((u) => u.law === law);
+    COURSES.forEach((c) => {
+      const us = UNITS.filter((u) => u.course === c);
       const dn = us.filter(unitDone).length;
-      h += '<details class="lawgroup"' + (nu && nu.law === law ? " open" : "") + '><summary><span class="name">' + esc(law.short) + '</span><span class="cnt">' + dn + "/" + us.length + " 단원</span></summary><div class=\"units\">" +
+      h += '<details class="lawgroup"' + (nu && nu.course === c ? " open" : "") + '><summary><span class="name">' + esc(c.name) + '</span><span class="cnt">' + dn + "/" + us.length + " 단원</span></summary><div class=\"units\">" +
         us.map((u) => {
           const r = S.units[u.id];
           return '<button class="unit" data-unit="' + u.id + '"><span class="dot ' + (r ? "done" : nu === u ? "next" : "") + '">' + (r ? "✓" : "") + '</span><span><span class="ut">' + esc(u.title) + (u.kind === "terms" ? '<span class="tag">용어</span>' : "") + '</span><br><span class="us">' + esc(u.sub) + '</span></span><span class="sc">' + (r ? r.r + "/" + r.n : (u.kind === "terms" ? u.terms.length + "개" : u.arts.length + "조")) + "</span></button>";
@@ -480,40 +581,45 @@ h2 { font-size: 1rem; margin: 0; }
       });
     }
     steps.push({ t: "done" });
-    L = { u, steps, i: 0, r: 0, n: 0, picked: null };
+    L = { u, steps, i: 0, r: 0, n: 0 };
     show("learn", true);
     renderStep();
     window.scrollTo(0, 0);
+  }
+  function navRow(primary) {
+    return '<div class="row navrow">' + (L.i > 0 ? '<button class="btn" id="prev">← 이전</button>' : "") + '<span class="grow"></span>' + (primary || "") + "</div>";
   }
   function renderStep() {
     const { u, steps, i } = L;
     const s = steps[i];
     const pct = Math.round((i / (steps.length - 1)) * 100);
-    let h = '<div class="card"><div class="lessonhead"><span class="t">' + esc(u.law.short) + " · " + esc(u.title) + '</span><span class="row"><span class="step">' + Math.min(i + 1, steps.length - 1) + "/" + (steps.length - 1) + '</span><button class="btn ghost small" id="quit">목록으로</button></span></div><div class="progress"><i style="width:' + pct + '%"></i></div>';
+    let h = '<div class="card"><div class="lessonhead"><span class="t">' + esc(u.course.short) + " · " + esc(u.title) + '</span><span class="row"><span class="step">' + Math.min(i + 1, steps.length - 1) + "/" + (steps.length - 1) + '</span><button class="btn ghost small" id="quit">목록으로</button></span></div><div class="progress"><i style="width:' + pct + '%"></i></div>';
     if (s.t === "read") {
       const keys = [...new Set(candidates(s.a).map((c) => c.ans))].slice(0, 8);
-      h += refHtml(s.a) + fullText(s.a, { keys: true }) +
+      h += (isSub(s.a) && u.course.id === "set" ? '<div class="subnote">↳ 바로 앞 법 조문을 구체화한 ' + esc(s.a.law.short) + " 조문입니다.</div>" : "") +
+        refHtml(s.a) + fullText(s.a, { keys: true }) + attachedByl(s.a, true) +
         (keys.length ? '<div class="keys"><span class="lbl">외울 것</span>' + keys.map((k) => '<span class="k">' + esc(k) + "</span>").join("") + "</div>" : "") +
-        explainBox(s.a.key) +
-        '<div class="row end"><button class="btn primary" id="go">다 읽었어요</button></div>';
+        explainBox(s.a.key) + navRow('<button class="btn primary" id="go">다 읽었어요 →</button>');
     } else if (s.t === "q") {
-      h += qHtml(s.a, s.c, s.opts, L.picked, true);
+      h += qHtml(s.a, s.c, s.opts, s.picked, true);
     } else if (s.t === "self") {
       h += refHtml(s.a) + '<div class="hint">이 조문은 숫자나 핵심 용어가 없어 문제 대신 스스로 확인합니다. 내용을 내 말로 설명할 수 있나요?</div>' + fullText(s.a) +
-        '<div class="row end"><button class="btn bad" data-self="no">아직 모르겠어요</button><button class="btn good" data-self="ok">설명할 수 있어요</button></div>';
+        (s.picked ? navRow('<span class="hint">' + (s.picked === "ok" ? "설명할 수 있다고 표시했습니다." : "다시 보기로 표시했습니다.") + '</span><button class="btn primary" id="next">다음 →</button>')
+          : navRow('<button class="btn bad" data-self="no">아직 모르겠어요</button><button class="btn good" data-self="ok">설명할 수 있어요</button>'));
     } else if (s.t === "term") {
       const t = s.x;
       h += '<div class="ref"><span class="law">' + esc(t.law.short) + '</span><span class="no">' + esc(t.art.no) + "</span><span>정의</span>" + lamps(t.id) + "</div>" +
-        '<div class="termface"><div class="term">' + esc(t.term) + '</div><div class="def">' + esc(t.def) + "</div></div>" + explainBox(t.key) +
-        '<div class="row end"><button class="btn primary" id="go">다음 용어</button></div>';
+        '<div class="termface"><div class="term">' + esc(t.term) + '</div><div class="def">' + fullText(t) + "</div></div>" +
+        (t.links.length ? '<div class="linked"><div class="rh">이 용어를 구체화한 규정</div>' + t.links.map((a) => refHtml(a) + fullText(a, { keys: true }) + attachedByl(a, true)).join("") + "</div>" : "") +
+        explainBox(t.key) + navRow('<button class="btn primary" id="go">다음 →</button>');
     } else if (s.t === "tq") {
-      h += tqHtml(s.x, s.opts, L.picked, true);
+      h += tqHtml(s.x, s.opts, s.picked, true);
     } else {
       const done = S.units[u.id];
       const idx = COURSE.indexOf(u.id);
       const nx = COURSE.slice(idx + 1).map((id) => UNITBY[id]).find((x) => !unitDone(x));
       h += '<div class="empty"><div class="big">' + L.r + " / " + L.n + '</div><div>' + (L.n === 0 ? "단원을 끝냈습니다." : L.r === L.n ? "모두 맞혔습니다." : "틀린 조문은 복습 퀴즈에 다시 나옵니다.") + "</div>" +
-        '<div class="row">' + (nx ? '<button class="btn primary" data-unit="' + nx.id + '">다음 단원: ' + esc(nx.title) + "</button>" : "") + '<button class="btn" id="quit">단원 목록</button></div></div>';
+        '<div class="row">' + (nx ? '<button class="btn primary" data-unit="' + nx.id + '">다음 단원: ' + esc(nx.title) + "</button>" : "") + '<button class="btn" id="quit">단원 목록</button></div></div>' + navRow("");
       if (!done) { S.units[u.id] = { d: now(), r: L.r, n: L.n }; touch(); }
     }
     h += "</div>";
@@ -526,18 +632,20 @@ h2 { font-size: 1rem; margin: 0; }
     const ok = done && opts[picked] === c.ans;
     const blankH = done ? '<span class="blank ' + (ok ? "ok" : "no") + '">' + esc(c.ans) + "</span>" : '<span class="blank">( ? )</span>';
     const lead = c.li > 0 && !subLine(a.lines[0]) ? '<div class="lead">' + esc(a.lines[0].length > 110 ? a.lines[0].slice(0, 110) + "…" : a.lines[0]) + "</div>" : "";
+    const next = '<button class="btn primary" id="next">다음 →</button>';
     return refHtml(a) + figs(lead) + '<div class="q">' + figs(esc(line.slice(0, c.s)) + blankH + esc(line.slice(c.e))) + "</div>" + choicesHtml(opts, c.ans, picked) +
       (done ? '<div class="verdict ' + (ok ? "ok" : "no") + '">' + (ok ? "정답입니다." : "정답은 ‘" + esc(c.ans) + "’입니다.") + "</div>" +
-        (inLesson ? "" : '<details class="full"><summary>조문 전체 보기</summary>' + fullText(a, { hl: c }) + "</details>" + explainBox(a.key)) +
-        '<div class="row end"><button class="btn primary" id="next">다음</button></div>'
-        : '<div class="hint">숫자 키 1–4로도 고를 수 있습니다.</div>');
+        (inLesson ? "" : '<details class="full"><summary>조문 전체 보기</summary>' + fullText(a, { hl: c }) + attachedByl(a, false) + "</details>" + explainBox(a.key)) +
+        (inLesson ? navRow(next) : '<div class="row end">' + next + "</div>")
+        : (inLesson ? navRow('<span class="hint">숫자 키 1–4로도 고를 수 있습니다.</span>') : '<div class="hint">숫자 키 1–4로도 고를 수 있습니다.</div>'));
   }
-  function tqHtml(t, opts, picked) {
+  function tqHtml(t, opts, picked, inLesson) {
     const done = picked !== null && picked !== undefined;
     const ok = done && opts[picked] === t.term;
+    const next = '<button class="btn primary" id="next">다음 →</button>';
     return '<div class="ref"><span class="law">' + esc(t.law.short) + '</span><span>용어 확인</span>' + lamps(t.id) + "</div>" +
       '<div class="q">다음 뜻에 맞는 용어는?</div><div class="lead" style="font-size:.98rem;color:var(--ink)">' + esc(maskTerm(t)) + "</div>" + choicesHtml(opts, t.term, picked) +
-      (done ? '<div class="verdict ' + (ok ? "ok" : "no") + '">' + (ok ? "정답입니다." : "정답은 ‘" + esc(t.term) + "’입니다.") + '</div><div class="row end"><button class="btn primary" id="next">다음</button></div>' : "");
+      (done ? '<div class="verdict ' + (ok ? "ok" : "no") + '">' + (ok ? "정답입니다." : "정답은 ‘" + esc(t.term) + "’입니다.") + "</div>" + (inLesson ? navRow(next) : '<div class="row end">' + next + "</div>") : (inLesson ? navRow("") : ""));
   }
   function choicesHtml(opts, ans, picked) {
     const done = picked !== null && picked !== undefined;
@@ -550,16 +658,17 @@ h2 { font-size: 1rem; margin: 0; }
   }
   function lessonAnswer(i) {
     const s = L.steps[L.i];
-    if (L.picked !== null) return;
-    L.picked = i;
+    if (s.picked !== undefined && s.picked !== null) return;
+    s.picked = i;
     const ok = s.t === "q" ? s.opts[i] === s.c.ans : s.opts[i] === s.x.term;
     L.n++; if (ok) L.r++;
     if (s.t === "q") grade(s.a.id, ok ? "ok" : "no", "learn", s.c.ans);
     else grade(s.x.id, ok ? "ok" : "no", "term", s.x.term);
     renderStep();
   }
-  function lessonNext() { L.i = Math.min(L.i + 1, L.steps.length - 1); L.picked = null; renderStep(); window.scrollTo(0, 0); }
+  function lessonGo(d) { L.i = Math.max(0, Math.min(L.i + d, L.steps.length - 1)); renderStep(); window.scrollTo(0, 0); }
   $("#p-learn").addEventListener("click", (e) => {
+    if (e.target.closest(".xref")) return;
     const u = e.target.closest("[data-unit]");
     if (u) { startUnit(u.dataset.unit); return; }
     if (e.target.closest("#quit")) { L = null; renderLearnHome(); window.scrollTo(0, 0); return; }
@@ -567,8 +676,9 @@ h2 { font-size: 1rem; margin: 0; }
     const c = e.target.closest(".choice");
     if (c && !c.disabled) { lessonAnswer(+c.dataset.i); return; }
     const sf = e.target.closest("[data-self]");
-    if (sf) { grade(L.steps[L.i].a.id, sf.dataset.self, "self"); lessonNext(); return; }
-    if (e.target.closest("#go") || e.target.closest("#next")) lessonNext();
+    if (sf) { const s = L.steps[L.i]; if (!s.picked) { s.picked = sf.dataset.self; grade(s.a.id, sf.dataset.self, "self"); } lessonGo(1); return; }
+    if (e.target.closest("#prev")) { lessonGo(-1); return; }
+    if (e.target.closest("#go") || e.target.closest("#next")) lessonGo(1);
   });
 
   // ---------- 복습 퀴즈 ----------
@@ -638,7 +748,7 @@ h2 { font-size: 1rem; margin: 0; }
     const hl = (s) => { if (!q) return esc(s); const i = s.indexOf(q); return i < 0 ? esc(s) : esc(s.slice(0, i)) + "<mark>" + esc(q) + "</mark>" + esc(s.slice(i + q.length)); };
     $("#results").innerHTML = (hits.length ? '<div class="hint">' + hits.length + "개 조문</div>" : '<div class="empty">찾는 조문이 없습니다. 다른 낱말로 검색해 보세요.</div>') +
       shown.map((a) => '<details class="item"><summary><span class="lawtag">' + esc(a.law.short) + '</span><span class="no">' + esc(a.no) + '</span><span class="t">' + hl(a.title) + pendTag(a) + "</span>" + lamps(a.id) + "</summary>" +
-        '<div class="arttext" style="padding-top:8px">' + a.lines.map((l) => '<p class="' + (subLine(l) ? "sub" : "") + '">' + figs(hl(l)) + "</p>").join("") + "</div>" + explainBox(a.key) +
+        '<div style="padding-top:8px">' + fullText(a, { q }) + "</div>" + attachedByl(a, false) + explainBox(a.key) +
         (candidates(a).length ? '<div class="row" style="padding-top:8px"><button class="btn small" data-quiz="' + esc(a.id) + '">이 조문으로 문제 풀기</button></div>' : "") + "</details>").join("") +
       (hits.length > shown.length ? '<button class="btn" id="more">더 보기 (' + (hits.length - shown.length) + "개 남음)</button>" : "");
   }
@@ -666,7 +776,7 @@ h2 { font-size: 1rem; margin: 0; }
       const items = ARTS.filter((a) => a.law === law).concat(TERMS.filter((t) => t.law === law));
       let r = 0, w = 0, seen = 0;
       items.forEach((x) => { const s = st(x.id); if (s) { seen++; r += s.r; w += s.w; } });
-      const us = UNITS.filter((u) => u.law === law);
+      const us = UNITS.filter((u) => u.course.laws.includes(law.id));
       return { law, seen, total: items.length, acc: r + w ? Math.round((r / (r + w)) * 100) : null, ud: us.filter(unitDone).length, ut: us.length };
     });
     const d = S.days[dayKey(now())] || [0, 0];
@@ -711,8 +821,10 @@ h2 { font-size: 1rem; margin: 0; }
     if (e.target.matches("input, textarea")) return;
     if (tab === "learn" && L) {
       const s = L.steps[L.i];
-      if ((s.t === "q" || s.t === "tq") && L.picked === null && /^[1-4]$/.test(e.key)) { e.preventDefault(); lessonAnswer(+e.key - 1); }
-      else if (e.key === "Enter" && (s.t === "read" || s.t === "term" || L.picked !== null) && s.t !== "done") { e.preventDefault(); lessonNext(); }
+      const answered = s.picked !== undefined && s.picked !== null;
+      if ((s.t === "q" || s.t === "tq") && !answered && /^[1-4]$/.test(e.key)) { e.preventDefault(); lessonAnswer(+e.key - 1); }
+      else if (e.key === "Enter" && (s.t === "read" || s.t === "term" || answered) && s.t !== "done") { e.preventDefault(); lessonGo(1); }
+      else if (e.key === "ArrowLeft" && L.i > 0) { e.preventDefault(); lessonGo(-1); }
     } else if (tab === "quiz" && Q) {
       if (Q.picked === null && /^[1-4]$/.test(e.key)) { e.preventDefault(); quizAnswer(+e.key - 1); }
       else if (Q.picked !== null && e.key === "Enter") { e.preventDefault(); nextQuiz(); }
@@ -723,21 +835,28 @@ h2 { font-size: 1rem; margin: 0; }
     LAWS = data.laws;
     LAWS.forEach((law) => {
       LAWBY[law.id] = law;
-      law.list = law.arts.map(([no, title, lines, key, pending]) => {
-        const a = { kind: "art", id: law.id + ":" + no, key, law, no, title, lines, pending };
+      law.list = law.arts.map(([no, title, lines, key, pending, refs]) => {
+        const a = { kind: "art", id: law.id + ":" + no, key, law, no, title, lines, pending, refs };
         ARTS.push(a); BYID[a.id] = a; KEYMAP[key] = a;
         return a;
       });
     });
+    BYL = data.byl || {};
+    EXT = data.ext || {};
+    const shortOf = { set: "철도안전법령", metro: "도시철도운전규칙", car: "철도차량운전규칙", gw: "광역철도세칙" };
+    COURSES = data.courses.map((c) => ({ id: c.id, name: c.name, short: shortOf[c.id] || c.name, laws: c.laws }));
+    const CBY = {};
+    COURSES.forEach((c) => (CBY[c.id] = c));
     data.units.forEach((u) => {
-      const law = LAWBY[u.law];
-      const unit = { id: u.id, law, kind: u.kind, title: u.title, sub: u.sub };
-      if (u.kind === "terms") unit.terms = u.terms.map(([term, def, ai], n) => {
-        const t = { kind: "term", id: "term:" + law.id + ":" + term, key: u.id + "-" + (n + 1), law, term, def, art: law.list[ai] };
+      const unit = { id: u.id, course: CBY[u.course], kind: u.kind, title: u.title, sub: u.sub };
+      if (u.kind === "terms") unit.terms = u.terms.map(([term, def, lid, ai, refs, links], n) => {
+        const law = LAWBY[lid];
+        const t = { kind: "term", id: "term:" + lid + ":" + term, key: u.id + "-" + (n + 1), law, term, def, lines: def.split("\n"), refs,
+          art: law.list[ai], links: links.map(([l2, i2]) => LAWBY[l2].list[i2]) };
         TERMS.push(t); BYID[t.id] = t; KEYMAP[t.key] = t;
         return t;
       });
-      else unit.arts = u.arts.map((i) => law.list[i]);
+      else unit.arts = u.items.map(([lid, i]) => LAWBY[lid].list[i]);
       UNITS.push(unit); UNITBY[u.id] = unit;
     });
     COURSE = data.course;
