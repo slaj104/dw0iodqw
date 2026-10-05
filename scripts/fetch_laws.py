@@ -48,10 +48,18 @@ def clean(fragment):
 def parse_articles(body):
     articles = []
     last_no = 0
-    for block in body.split('<div class="pgroup">')[1:]:
+    chapter = section = ""
+    for block in re.split(r'<div class="pgroup"[^>]*>', body)[1:]:
         paras = [clean(p) for p in re.findall(r"<p[^>]*>(.*?)</p>", block, re.S)]
         paras = [p for p in paras if p]
         if not paras:
+            continue
+        head = re.sub(r"\s*<[^>]*>\s*$", "", paras[0])
+        if re.match(r"제\d+장(?:의\d+)?\s", head):
+            chapter, section = head, ""
+            continue
+        if re.match(r"제\d+절(?:의\d+)?\s", head):
+            section = head
             continue
         m = re.match(r"(제\d+조(?:의\d+)?)\s*(?:\(([^)]*)\))?\s*(.*)", paras[0])
         if not m:
@@ -66,8 +74,33 @@ def parse_articles(body):
             "no": m.group(1),
             "title": m.group(2) or "",
             "text": "\n".join(lines),
+            "chapter": chapter,
+            "section": section,
         })
     return articles
+
+
+def split_pending(articles):
+    """law.go.kr 은 시행일이 뒤로 정해진 개정 조문을 '[시행일: …] 제N조' 꼬리표와 함께 이어 붙여 보여준다.
+    한 블록에 붙어 들어온 새 조문(예: 제79조의2)을 떼어 내고, 시행 예정일을 pending 필드에 적는다."""
+    out = []
+    for a in articles:
+        cur = dict(a, text="")
+        lines = a["text"].split("\n")
+        for i, ln in enumerate(lines):
+            m = re.match(r"(제\d+조(?:의\d+)?)\(([^)]*)\)\s*(.*)", ln)
+            if i > 0 and m and m.group(1) != a["no"]:
+                out.append(cur)
+                cur = dict(a, no=m.group(1), title=m.group(2), text=m.group(3))
+                continue
+            cur["text"] = (cur["text"] + "\n" + ln) if cur["text"] else ln
+        out.append(cur)
+    for a in out:
+        m = re.search(r"\[시행일:\s*([\d.\s]+?)\.?\]\s*" + re.escape(a["no"]) + r"\s*$", a["text"])
+        if m:
+            a["pending"] = re.sub(r"\s+", "", m.group(1)).replace(".", "-")
+            a["text"] = a["text"][:m.start()] + "[시행일: " + m.group(1).strip() + ".]"
+    return out
 
 
 def fetch_byl(body, name, seen):
@@ -92,6 +125,18 @@ def fetch_byl(body, name, seen):
     return out
 
 
+def write_md(name, data):
+    md = [f"# {data['title']}", "", f"- {data['info']}" if data["info"] else "", f"- 시행일: {data['efYd']}", f"- 출처: {data['source']}", ""]
+    for a in data["articles"]:
+        md += [f"### {a['no']}({a['title']})" if a["title"] else f"### {a['no']}", ""]
+        if a.get("pending"):
+            md += [f"> {a['pending']} 시행 예정인 개정 내용이 반영된 조문입니다.", ""]
+        md += [a["text"].replace("\n", "\n\n"), ""]
+    if data["appendices"]:
+        md += ["## 별표", ""] + [f"- [{b['no']}] {b['title']} — [PDF]({b['pdf']}) · [텍스트]({b['txt']})" for b in data["appendices"]]
+    (OUT / f"{name}.md").write_text("\n".join(md), encoding="utf-8")
+
+
 def main():
     OUT.mkdir(exist_ok=True)
     index = []
@@ -103,18 +148,13 @@ def main():
                     data=f"lsiSeq={seq}&chrClsCd=010202&efYd={efyd}&ancYnChk=0&nwJoYnInfo=Y&efGubun=Y&vSct=*")
         title = clean(re.search(r"<h2[^>]*>(.*?)</h2>", body, re.S).group(1)) if "<h2" in body else name
         info = clean(m.group(1)) if (m := re.search(r'<div class="ct_sub">(.*?)</div>', body, re.S)) else ""
-        arts = parse_articles(body)
+        arts = split_pending(parse_articles(body))
         print(f"{name}: 조문 {len(arts)}개 (시행 {efyd})")
         bylpo = fetch_byl(body, name, set())
         data = {"law": name, "title": title, "info": info, "lsiSeq": seq, "efYd": efyd,
                 "source": f"{BASE}/법령/{name}", "articles": arts, "appendices": bylpo}
         (OUT / f"{name}.json").write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
-        md = [f"# {title}", "", f"- {info}" if info else "", f"- 시행일: {efyd}", f"- 출처: {data['source']}", ""]
-        for a in arts:
-            md += [f"### {a['no']}({a['title']})" if a["title"] else f"### {a['no']}", "", a["text"].replace("\n", "\n\n"), ""]
-        if bylpo:
-            md += ["## 별표", ""] + [f"- [{b['no']}] {b['title']} — [PDF]({b['pdf']}) · [텍스트]({b['txt']})" for b in bylpo]
-        (OUT / f"{name}.md").write_text("\n".join(md), encoding="utf-8")
+        write_md(name, data)
         index.append({"law": name, "efYd": efyd, "articles": len(arts), "appendices": len(bylpo)})
     (OUT / "index.json").write_text(json.dumps(index, ensure_ascii=False, indent=1), encoding="utf-8")
 

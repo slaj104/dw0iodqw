@@ -3,7 +3,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans+KR:wght@400;600;700&display=swap">
 <style>
-/* 레이아웃: 한 열짜리 학습 앱. 위에 고정 탭, 가운데 문제 카드 하나, 아래로 해설 */
+/* 레이아웃: 한 열짜리 학습 앱. 위에 고정 탭, 가운데 학습 카드 하나, 아래로 해설 */
 :root {
   --bg: #EEF1F5;
   --surface: #FFFFFF;
@@ -44,21 +44,21 @@ button { font: inherit; color: inherit; cursor: pointer; }
 button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); }
-.brand { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-block: 14px 8px; }
-.brand h1 { font-family: var(--f-display); font-weight: 400; font-size: 1.45rem; letter-spacing: 0.01em; margin: 0; text-wrap: balance; }
-.brand .sub { color: var(--muted); font-size: 0.8rem; }
-.today { font-family: var(--f-mono); font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+header.top .wrap { padding-block: 0; }
+.brand { display: flex; align-items: baseline; justify-content: space-between; gap: 4px 12px; flex-wrap: wrap; padding-block: 12px 6px; }
+.brand h1 { font-family: var(--f-display); font-weight: 400; font-size: 1.4rem; letter-spacing: 0.01em; margin: 0; }
+.today { font-family: var(--f-mono); font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 nav.tabs { display: flex; gap: 4px; overflow-x: auto; padding-block: 0 8px; }
 nav.tabs button { border: 0; background: transparent; padding: 7px 12px; border-radius: 999px; color: var(--muted); font-weight: 600; white-space: nowrap; }
 nav.tabs button[aria-selected="true"] { background: var(--ink); color: var(--bg); }
 
-.chips { display: flex; flex-wrap: wrap; gap: 6px; padding-block: 12px 4px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 11px; font-size: 0.82rem; color: var(--muted); }
 .chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); font-weight: 600; }
 
-.panel { padding-block: 12px; display: grid; gap: 14px; }
+.panel { padding-block: 14px; display: grid; gap: 14px; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 12px; min-width: 0; }
-.ref { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 0.82rem; color: var(--muted); }
+.ref { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 0.82rem; color: var(--muted); }
 .ref .law { font-weight: 700; color: var(--accent); }
 .ref .no { font-family: var(--f-mono); color: var(--ink); }
 .lamps { display: inline-flex; gap: 3px; margin-left: auto; }
@@ -70,8 +70,8 @@ nav.tabs button[aria-selected="true"] { background: var(--ink); color: var(--bg)
 .blank.ok { color: var(--good); border-color: var(--good); }
 .blank.no { color: var(--bad); border-color: var(--bad); }
 .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-@media (max-width: 420px) { .choices { grid-template-columns: 1fr; } }
-.choice { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 11px 13px; display: flex; gap: 10px; align-items: baseline; min-width: 0; }
+@media (max-width: 440px) { .choices { grid-template-columns: 1fr; } }
+.choice { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 11px 13px; display: flex; gap: 10px; align-items: baseline; min-width: 0; overflow-wrap: anywhere; }
 .choice .k { font-family: var(--f-mono); font-size: 0.75rem; color: var(--muted); }
 .choice:hover:not(:disabled) { border-color: var(--accent); }
 .choice.ok { border-color: var(--good); background: var(--good-soft); }
@@ -81,21 +81,55 @@ nav.tabs button[aria-selected="true"] { background: var(--ink); color: var(--bg)
 .verdict.ok { color: var(--good); }
 .verdict.no { color: var(--bad); }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.row.end { justify-content: flex-end; }
 .btn { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 9px 16px; font-weight: 600; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
 .btn.good { border-color: var(--good); color: var(--good); }
-.btn.warn { border-color: var(--warn); color: var(--warn); }
 .btn.bad { border-color: var(--bad); color: var(--bad); }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--muted); padding-inline: 8px; }
 .btn.small { padding: 5px 10px; font-size: 0.82rem; }
+.btn.wide { width: 100%; padding-block: 13px; font-size: 1rem; }
 .hint { color: var(--muted); font-size: 0.8rem; }
 details.full summary { color: var(--muted); font-size: 0.85rem; cursor: pointer; }
-.arttext { display: grid; gap: 6px; font-size: 0.92rem; padding-top: 8px; word-break: keep-all; overflow-wrap: anywhere; }
+.arttext { display: grid; gap: 7px; font-size: 0.95rem; word-break: keep-all; overflow-wrap: anywhere; }
 .arttext p { margin: 0; }
+.arttext p.sub { padding-left: 1.2em; }
+b.key { color: var(--accent); background: var(--accent-soft); border-radius: 4px; padding: 0 3px; font-weight: 700; }
 mark { background: var(--warn-soft); color: inherit; border-radius: 3px; padding: 0 2px; }
+.keys { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 0.82rem; }
+.keys .lbl { color: var(--muted); }
+.keys span.k { border: 1px solid var(--accent); color: var(--accent); border-radius: 6px; padding: 1px 7px; font-weight: 600; }
 
-.cardface { display: grid; gap: 6px; padding-block: 18px; text-align: center; }
-.cardface .no { font-family: var(--f-mono); color: var(--muted); }
-.cardface .title { font-family: var(--f-display); font-size: 1.6rem; line-height: 1.3; text-wrap: balance; }
+.explain { border: 1px dashed var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 8px; }
+.explain .out { white-space: pre-wrap; font-size: 0.93rem; word-break: keep-all; overflow-wrap: anywhere; }
+.explain .out:empty { display: none; }
+
+.progress { height: 6px; background: var(--line); border-radius: 999px; overflow: hidden; }
+.progress i { display: block; height: 100%; background: var(--accent); }
+.lessonhead { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.lessonhead .t { font-weight: 700; min-width: 0; }
+.lessonhead .step { font-family: var(--f-mono); color: var(--muted); font-size: 0.8rem; }
+.termface { display: grid; gap: 8px; padding-block: 6px; }
+.termface .term { font-family: var(--f-display); font-size: 1.7rem; line-height: 1.25; }
+.termface .def { font-size: 1rem; word-break: keep-all; overflow-wrap: anywhere; }
+
+.intro ol { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; }
+.intro h2 { font-family: var(--f-display); font-weight: 400; font-size: 1.25rem; }
+.lawgroup { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+.lawgroup > summary { list-style: none; cursor: pointer; padding: 14px 16px; display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.lawgroup > summary::-webkit-details-marker { display: none; }
+.lawgroup .name { font-weight: 700; }
+.lawgroup .cnt { font-family: var(--f-mono); color: var(--muted); font-size: 0.8rem; }
+.units { display: grid; padding: 0 8px 8px; }
+.unit { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; align-items: center; text-align: left; border: 0; border-top: 1px solid var(--line); background: transparent; padding: 10px 8px; }
+.unit:hover { background: var(--bg); }
+.unit .dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font-size: 0.7rem; color: var(--bg); }
+.unit .dot.done { background: var(--good); border-color: var(--good); }
+.unit .dot.next { border-color: var(--accent); }
+.unit .ut { font-weight: 600; font-size: 0.92rem; }
+.unit .us { color: var(--muted); font-size: 0.78rem; overflow-wrap: anywhere; }
+.unit .sc { font-family: var(--f-mono); font-size: 0.78rem; color: var(--muted); white-space: nowrap; }
+.tag { font-size: 0.7rem; font-weight: 700; color: var(--warn); border: 1px solid var(--warn); border-radius: 4px; padding: 0 4px; margin-left: 4px; }
 
 .search { width: 100%; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 10px; padding: 10px 12px; font: inherit; }
 .list { display: grid; gap: 8px; }
@@ -104,44 +138,42 @@ mark { background: var(--warn-soft); color: inherit; border-radius: 3px; padding
 .item summary::-webkit-details-marker { display: none; }
 .item .no { font-family: var(--f-mono); font-size: 0.85rem; }
 .item .t { font-weight: 600; min-width: 0; }
-.item .lawtag { font-size: 0.72rem; color: var(--accent); font-weight: 700; }
+.lawtag { font-size: 0.72rem; color: var(--accent); font-weight: 700; }
 
-.stats { display: grid; gap: 10px; }
+.stats { display: grid; gap: 12px; }
 .lawstat { display: grid; gap: 6px; }
 .lawstat .head { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 0.9rem; }
-.lawstat .num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.82rem; }
+.lawstat .num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.8rem; }
 .bar { position: relative; height: 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
 .bar .fill { position: absolute; inset: 0 auto 0 0; background: var(--accent); }
 .bar .fill.pass { background: var(--good); }
 .bar .fill.fail { background: var(--bad); }
 .bar .cut { position: absolute; top: -2px; bottom: -2px; left: 60%; width: 2px; background: var(--ink); opacity: 0.55; }
-.big { font-family: var(--f-display); font-size: 2rem; line-height: 1; font-variant-numeric: tabular-nums; }
+.big { font-family: var(--f-display); font-size: 1.9rem; line-height: 1; font-variant-numeric: tabular-nums; }
 .tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .tile { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 4px; }
-.tile .lbl { font-size: 0.75rem; color: var(--muted); letter-spacing: 0.02em; }
+.tile .lbl { font-size: 0.75rem; color: var(--muted); }
 .weak { display: grid; gap: 6px; }
 .weak .w { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 6px; font-size: 0.88rem; }
 .w .cnt { font-family: var(--f-mono); color: var(--bad); font-size: 0.8rem; }
 h2 { font-size: 1rem; margin: 0; }
-.empty { color: var(--muted); text-align: center; padding: 28px 8px; }
-.save { font-size: 0.75rem; color: var(--muted); }
+.empty { color: var(--muted); text-align: center; padding: 24px 8px; display: grid; gap: 12px; justify-items: center; }
+.save { font-size: 0.75rem; color: var(--muted); padding-top: 8px; }
 @media (prefers-reduced-motion: no-preference) {
-  .choice, .chip, .btn { transition: background-color .15s, border-color .15s; }
+  .choice, .chip, .btn, .unit { transition: background-color .15s, border-color .15s; }
+  .progress i { transition: width .25s; }
 }
 </style>
 
 <header class="top">
   <div class="wrap">
     <div class="brand">
-      <div>
-        <h1>2종 철도법 암기장</h1>
-        <div class="sub">제2종 전기차량 운전면허 필기 · 철도 관련 법 (과락 60점)</div>
-      </div>
+      <h1>2종 철도법 암기장</h1>
       <div class="today" id="today">오늘 0문제</div>
     </div>
     <nav class="tabs" role="tablist">
-      <button role="tab" id="tab-quiz" aria-selected="true" data-tab="quiz">빈칸 퀴즈</button>
-      <button role="tab" id="tab-card" aria-selected="false" data-tab="card">암기카드</button>
+      <button role="tab" id="tab-learn" aria-selected="true" data-tab="learn">배우기</button>
+      <button role="tab" id="tab-quiz" aria-selected="false" data-tab="quiz">복습 퀴즈</button>
       <button role="tab" id="tab-browse" aria-selected="false" data-tab="browse">조문 찾기</button>
       <button role="tab" id="tab-stats" aria-selected="false" data-tab="stats">내 기록</button>
     </nav>
@@ -149,10 +181,10 @@ h2 { font-size: 1rem; margin: 0; }
 </header>
 
 <main class="wrap">
-  <div class="chips" id="chips" aria-label="공부할 법령"></div>
-  <section class="panel" id="p-quiz"><div class="card"><div class="empty">법령 원문을 불러오는 중입니다.</div></div></section>
-  <section class="panel" id="p-card" hidden></section>
+  <section class="panel" id="p-learn"><div class="card"><div class="empty">법령 원문을 불러오는 중입니다.</div></div></section>
+  <section class="panel" id="p-quiz" hidden></section>
   <section class="panel" id="p-browse" hidden>
+    <div class="chips" id="browse-chips"></div>
     <input class="search" id="q" type="search" placeholder="조문 번호, 제목, 내용 검색 (예: 제10조, 폐색, 과태료)" autocomplete="off">
     <div class="list" id="results"></div>
   </section>
@@ -168,18 +200,21 @@ h2 { font-size: 1rem; margin: 0; }
   const now = () => Date.now();
   const MIN = 60e3, DAY = 864e5;
   const INTERVAL = [2 * MIN, 10 * MIN, DAY, 3 * DAY, 7 * DAY, 16 * DAY];
-  const LS_KEY = "rail2-progress-v1";
+  const LS_KEY = "rail2-progress-v1", LS_EXPL = "rail2-explain-v1";
+  const shuffle = (arr) => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
+  const dayKey = (t) => { const d = new Date(t); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
 
   // ---------- 진도 상태 ----------
-  // arts[id] = {b: 단계 0-5, d: 다음 복습 시각, r: 맞힘, w: 틀림, t: 마지막}
-  let S = { v: 1, u: 0, arts: {}, log: [], days: {}, laws: null };
-  function lsGet() { try { return JSON.parse(localStorage.getItem(LS_KEY) || "null"); } catch (e) { return null; } }
+  // arts[id] = {b: 외운 단계 0-5, d: 다음 복습 시각, r: 맞힘, w: 틀림, t: 마지막} — 조문과 용어 모두
+  // units[id] = {d: 끝낸 시각, r: 맞힘, n: 문제 수}
+  const blank = () => ({ v: 2, u: 0, arts: {}, units: {}, log: [], days: {}, laws: null, scope: "learned" });
+  let S = blank();
+  function adopt(x) { S = Object.assign(blank(), JSON.parse(JSON.stringify(x))); S.units = S.units || {}; S.v = 2; }
+  try { const c = JSON.parse(localStorage.getItem(LS_KEY) || "null"); if (c && c.arts) adopt(c); } catch (e) {}
   function lsSet() { try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch (e) {} }
-  const cached = lsGet();
-  if (cached && cached.arts) S = Object.assign(S, cached);
 
-  let dbRef = null, saving = false, dirty = false, saveTimer = null;
-  function setSaveNote(t) { $("#save").textContent = t; }
+  let DB = null, dbRef = null, saving = false, dirty = false, saveTimer = null;
+  const note = () => (dbRef ? "기록이 내 계정에 저장됩니다." : "기록은 이 기기에만 저장됩니다.");
   function touch() {
     S.u = now();
     lsSet();
@@ -191,63 +226,52 @@ h2 { font-size: 1rem; margin: 0; }
   async function flush() {
     if (!dbRef || saving || !dirty) return;
     saving = true; dirty = false;
-    try { await dbRef.set(JSON.parse(JSON.stringify(S))); setSaveNote("기록이 클라우드에 저장됩니다."); }
+    try { await dbRef.set(JSON.parse(JSON.stringify(S))); }
     catch (e) {
-      if (e && (e.code === "invalid_argument" || e.code === "revoked" || e.code === "not_granted")) { dbRef = null; setSaveNote("기록은 이 기기에만 저장됩니다."); }
+      if (e && ["invalid_argument", "revoked", "not_granted", "quota_exceeded"].includes(e.code)) { dbRef = null; $("#save").textContent = note(); }
       else dirty = true;
     }
     saving = false;
     if (dirty) saveTimer = setTimeout(flush, 3000);
   }
   async function connectDb() {
-    setSaveNote("기록은 이 기기에만 저장됩니다.");
+    $("#save").textContent = note();
     try {
       if (!window.claude || !window.claude.use) return;
       const user = await window.claude.use("user");
-      const owner = user ? await user.isOwner() : false;
-      if (!owner) return;
+      if (!user || !(await user.isOwner())) return;
       const db = await window.claude.use("db");
       if (!db) return;
+      DB = db;
       const ref = db.doc("progress/main");
       const snap = await ref.get();
-      if (snap.exists) {
-        const remote = snap.data();
-        if (remote && remote.arts && (remote.u || 0) > (S.u || 0)) {
-          S = Object.assign({ v: 1, u: 0, arts: {}, log: [], days: {}, laws: null }, JSON.parse(JSON.stringify(remote)));
-          lsSet();
-          applyLawFilter(); renderChips(); refresh();
-        }
-      }
+      const remote = snap.exists ? snap.data() : null;
+      if (remote && remote.arts && (remote.u || 0) > (S.u || 0)) { adopt(remote); lsSet(); rerender(); }
       dbRef = ref;
-      setSaveNote("기록이 클라우드에 저장됩니다.");
-      if (!snap.exists || (S.u || 0) > ((snap.data() || {}).u || 0)) { dirty = true; flush(); }
-    } catch (e) { /* 기기 저장으로 계속 */ }
+      $("#save").textContent = note();
+      if (!remote || (S.u || 0) > (remote.u || 0)) { dirty = true; flush(); }
+    } catch (e) { /* 이 기기 저장으로 계속 */ }
   }
 
   // ---------- 데이터 ----------
-  let LAWS = [], ARTS = [], BYID = {};
+  let LAWS = [], LAWBY = {}, ARTS = [], BYID = {}, TERMS = [], UNITS = [], UNITBY = {}, COURSE = [];
   let active = new Set();
-  const today = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
 
-  // ---------- 빈칸 후보 ----------
-  const NUM = /(?<![제\d,.])\d[\d,]*(?:\.\d+)?(?:\s?(?:억|천만|백만|만|천|백))*\s?(?:원|년|개월|일|시간|분(?!의)|초|킬로미터|미터|밀리미터|센티미터|퍼센트|%|점|명|회|세|배|량|톤|킬로그램|볼트)/g;
+  // ---------- 외울 거리(빈칸 후보) ----------
+  const NUM = /(?<![제\d,.])\d[\d,]*(?:\.\d+)?(?:\s?(?:억|천만|백만|만|천|백))*\s?(?:원|년|개월|일|시간|분(?!의)|초|킬로미터|미터|밀리미터|센티미터|퍼센트|%|점|명|회|세|배|량|톤|킬로그램|볼트|km\/h|㎞\/h)/g;
   const FRAC = /\d+분의\s?\d+/g;
   const CMP = ["이상", "이하", "초과", "미만"];
   const GROUPS = {
     ord: { w: 2, words: ["대통령령", "국토교통부령"], fake: ["총리령", "국토교통부 고시", "법률"] },
-    auth: { w: 1, words: ["국토교통부장관", "시ㆍ도지사", "철도운영자등", "철도시설관리자", "한국교통안전공단", "도시철도운영자", "운전업무종사자", "관제사", "역장", "기관사"] },
-    block: { w: 3, words: ["자동폐색식", "차내신호폐색식", "연동폐색식", "통표폐색식", "지도통신식", "지도식", "전령법", "격시법", "통신식", "지령식"] },
+    auth: { w: 1, words: ["국토교통부장관", "시ㆍ도지사", "철도운영자등", "철도시설관리자", "한국교통안전공단", "도시철도운영자", "운전업무종사자", "관제사", "역장", "기관사", "전철차장", "운전취급담당자"] },
+    block: { w: 3, words: ["자동폐색식", "차내신호폐색식", "연동폐색식", "통표폐색식", "지도통신식", "지도식", "전령법", "격시법", "통신식", "지령식", "차내폐색식"] },
     sig: { w: 3, words: ["정지신호", "경계신호", "주의신호", "감속신호", "진행신호", "유도신호", "입환신호"] },
     sigdev: { w: 3, words: ["장내신호기", "출발신호기", "폐색신호기", "엄호신호기", "유도신호기", "입환신호기", "원방신호기", "통과신호기", "중계신호기"] },
   };
   const WORD2GRP = {};
   Object.keys(GROUPS).forEach((g) => GROUPS[g].words.forEach((w) => (WORD2GRP[w] = g)));
-  const WORDRE = new RegExp(Object.keys(WORD2GRP).sort((a, b) => b.length - a.length).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "g");
-  const MULT = /억|천만|백만|만|천|백/;
-  function unitOf(tok) {
-    const u = tok.replace(/[\d,.\s]/g, "");
-    return /원$/.test(u) ? "money" : u.replace(/^(억|천만|백만|만|천|백)+/, "");
-  }
+  const WORDRE = new RegExp(Object.keys(WORD2GRP).sort((a, b) => b.length - a.length).join("|"), "g");
+  const unitOf = (tok) => { const u = tok.replace(/[\d,.\s]/g, ""); return /원$/.test(u) ? "money" : u.replace(/^(억|천만|백만|만|천|백)+/, ""); };
   const NUMPOOL = {};
   function candidates(a) {
     if (a.cands) return a.cands;
@@ -258,8 +282,7 @@ h2 { font-size: 1rem; margin: 0; }
       while ((m = NUM.exec(l))) {
         const tok = m[0];
         out.push({ li, s: m.index, e: m.index + tok.length, ans: tok, grp: "n:" + unitOf(tok), w: 3 });
-        const rest = l.slice(m.index + tok.length);
-        const c = rest.match(/^\s?(이상|이하|초과|미만)/);
+        const c = l.slice(m.index + tok.length).match(/^\s?(이상|이하|초과|미만)/);
         if (c) { const s = m.index + tok.length + c[0].indexOf(c[1]); out.push({ li, s, e: s + c[1].length, ans: c[1], grp: "cmp", w: 2 }); }
       }
       FRAC.lastIndex = 0;
@@ -270,12 +293,6 @@ h2 { font-size: 1rem; margin: 0; }
     a.cands = out;
     return out;
   }
-  function buildPools() {
-    ARTS.forEach((a) => candidates(a).forEach((c) => {
-      if (c.grp.startsWith("n:") || c.grp === "frac") (NUMPOOL[c.grp] = NUMPOOL[c.grp] || new Set()).add(c.ans.replace(/\s+/g, ""));
-    }));
-  }
-  const shuffle = (arr) => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
   function numVariants(ans) {
     const m = ans.match(/^(\d+)(.*)$/);
     if (!m) return [];
@@ -284,7 +301,7 @@ h2 { font-size: 1rem; margin: 0; }
   }
   function distractors(c) {
     const ans = c.ans.replace(/\s+/g, "");
-    let pool = [];
+    let pool;
     if (c.grp === "cmp") pool = CMP.filter((x) => x !== c.ans);
     else if (GROUPS[c.grp]) pool = shuffle(GROUPS[c.grp].words.concat(GROUPS[c.grp].fake || []).filter((x) => x !== c.ans));
     else {
@@ -293,34 +310,56 @@ h2 { font-size: 1rem; margin: 0; }
     }
     return pool.slice(0, 3);
   }
+  // 한 조문에서 서로 다른 줄의 문제를 가중치 순으로 최대 n개
+  function pickCands(a, n) {
+    const cs = candidates(a).slice();
+    const out = [], lines = new Set();
+    while (out.length < n && cs.length) {
+      const pool = cs.filter((c) => !lines.has(c.li));
+      const from = pool.length ? pool : cs;
+      let total = from.reduce((s, c) => s + c.w, 0), r = Math.random() * total, pick = from[0];
+      for (const c of from) { r -= c.w; if (r <= 0) { pick = c; break; } }
+      out.push(pick); lines.add(pick.li);
+      cs.splice(cs.indexOf(pick), 1);
+    }
+    return out;
+  }
+  function termChoices(t) {
+    const same = shuffle(TERMS.filter((x) => x !== t && x.law === t.law && x.term !== t.term));
+    const other = shuffle(TERMS.filter((x) => x !== t && x.law !== t.law && x.term !== t.term));
+    const picks = [];
+    for (const x of same.concat(other)) { if (!picks.includes(x.term)) picks.push(x.term); if (picks.length === 3) break; }
+    return shuffle([t.term].concat(picks));
+  }
+  function maskTerm(t) { return t.def.split(t.term).join("○○"); }
 
   // ---------- 복습 일정 ----------
   const st = (id) => S.arts[id] || null;
-  function pickArticle(pool, avoid) {
-    const t = now();
-    const list = pool.filter((a) => a.id !== avoid);
-    if (!list.length) return pool[0] || null;
-    const due = list.filter((a) => st(a.id) && st(a.id).d <= t).sort((x, y) => st(x.id).b - st(y.id).b || st(x.id).d - st(y.id).d);
-    if (due.length) return due[0];
-    const fresh = list.filter((a) => !st(a.id));
-    if (fresh.length) return fresh[Math.floor(Math.random() * fresh.length)];
-    return list.slice().sort((x, y) => st(x.id).d - st(y.id).d)[0];
-  }
-  function grade(a, result, kind, tok) {
-    const s = S.arts[a.id] || { b: 0, d: 0, r: 0, w: 0, t: 0 };
+  function grade(id, result, kind, tok) {
+    const s = S.arts[id] || { b: 0, d: 0, r: 0, w: 0, t: 0 };
     if (result === "ok") { s.b = Math.min(5, s.b + 1); s.r++; }
-    else if (result === "no") { s.b = 0; s.w++; }
-    s.d = now() + (result === "mid" ? 10 * MIN : INTERVAL[s.b]);
+    else { s.b = 0; s.w++; }
+    s.d = now() + INTERVAL[s.b];
     s.t = now();
-    S.arts[a.id] = s;
-    const d = today();
-    const day = S.days[d] || [0, 0];
+    S.arts[id] = s;
+    const k = dayKey(now());
+    const day = S.days[k] || [0, 0];
     day[0]++; if (result === "ok") day[1]++;
-    S.days[d] = day;
-    S.log.push([now(), a.id, kind, result === "ok" ? 1 : result === "no" ? 0 : 0.5, tok || ""]);
+    S.days[k] = day;
+    S.log.push([now(), id, kind, result === "ok" ? 1 : 0, tok || ""]);
     if (S.log.length > 400) S.log = S.log.slice(-400);
     touch();
     renderToday();
+  }
+  function pickDue(items, avoid) {
+    const t = now();
+    const list = items.filter((x) => x.id !== avoid);
+    if (!list.length) return items[0] || null;
+    const due = list.filter((x) => st(x.id) && st(x.id).d <= t).sort((x, y) => st(x.id).b - st(y.id).b || st(x.id).d - st(y.id).d);
+    if (due.length) return due[0];
+    const fresh = list.filter((x) => !st(x.id));
+    if (fresh.length) return fresh[Math.floor(Math.random() * fresh.length)];
+    return list.slice().sort((x, y) => st(x.id).d - st(y.id).d)[0];
   }
   function lamps(id) {
     const b = st(id) ? st(id).b : 0;
@@ -328,232 +367,381 @@ h2 { font-size: 1rem; margin: 0; }
     for (let i = 1; i <= 5; i++) h += '<i class="' + (i <= b ? "on" : "") + '"></i>';
     return h + "</span>";
   }
-  function refHtml(a) {
-    return '<div class="ref"><span class="law">' + esc(a.law.short) + '</span><span class="no">' + esc(a.no) + "</span><span>" + esc(a.title) + "</span>" + lamps(a.id) + "</div>";
+  const pendTag = (a) => (a.pending ? '<span class="tag" title="이 날짜부터 시행되는 개정 내용이 반영되어 있습니다">' + esc(a.pending.slice(2).replace(/-/g, ".")) + " 시행 예정</span>" : "");
+  const refHtml = (a) => '<div class="ref"><span class="law">' + esc(a.law.short) + '</span><span class="no">' + esc(a.no) + "</span><span>" + esc(a.title) + pendTag(a) + "</span>" + lamps(a.id) + "</div>";
+  const subLine = (l) => /^([가-하]\.|\d+\)|\(\d+\))\s/.test(l);
+  function lineHtml(l, ranges) {
+    if (!ranges || !ranges.length) return esc(l);
+    let h = "", pos = 0;
+    ranges.slice().sort((x, y) => x.s - y.s).forEach((r) => { if (r.s < pos) return; h += esc(l.slice(pos, r.s)) + r.open + esc(l.slice(r.s, r.e)) + r.close; pos = r.e; });
+    return h + esc(l.slice(pos));
   }
-  function fullText(a, hl) {
-    return '<div class="arttext">' + a.lines.map((l, i) => "<p>" + (hl && hl.li === i ? esc(l.slice(0, hl.s)) + "<mark>" + esc(l.slice(hl.s, hl.e)) + "</mark>" + esc(l.slice(hl.e)) : esc(l)) + "</p>").join("") + "</div>";
+  function fullText(a, opts) {
+    opts = opts || {};
+    return '<div class="arttext">' + a.lines.map((l, i) => {
+      let ranges = [];
+      if (opts.keys) ranges = candidates(a).filter((c) => c.li === i).map((c) => ({ s: c.s, e: c.e, open: '<b class="key">', close: "</b>" }));
+      if (opts.hl && opts.hl.li === i) ranges = [{ s: opts.hl.s, e: opts.hl.e, open: "<mark>", close: "</mark>" }];
+      return '<p class="' + (subLine(l) ? "sub" : "") + '">' + lineHtml(l, ranges) + "</p>";
+    }).join("") + "</div>";
   }
-  function pool() { return ARTS.filter((a) => active.has(a.law.id)); }
 
-  // ---------- 빈칸 퀴즈 ----------
-  let Q = null, lastQuizArt = null, forced = null;
+  // ---------- 쉽게 풀어 설명 (Claude) ----------
+  let SAMPLE = null;
+  let EXPL = {};
+  try { EXPL = JSON.parse(localStorage.getItem(LS_EXPL) || "{}") || {}; } catch (e) {}
+  function explainBox(key) {
+    if (!SAMPLE && !EXPL[key]) return "";
+    return '<div class="explain" data-ex="' + esc(key) + '"><div class="row"><button class="btn small" data-explain="' + esc(key) + '">' + (EXPL[key] ? "쉬운 설명 보기" : "쉽게 풀어 설명 듣기") + '</button><span class="hint">AI 설명이라 원문과 다르면 원문이 맞습니다.</span></div><div class="out"></div></div>';
+  }
+  function explainPrompt(key) {
+    const it = KEYMAP[key];
+    const head = "너는 철도차량 운전면허(제2종 전기차량, 지하철·전동차 기관사) 필기시험을 처음 준비하는 사람을 가르치는 친절한 강사다. 상대는 철도 지식이 전혀 없다.\n" +
+      "마크다운 기호(#, *, **) 없이 일반 텍스트로, 아래 형식을 지켜 한국어로 500자 안쪽으로 답해라.\n" +
+      "한 줄 요약: (한 문장)\n쉬운 풀이: (3~5문장. 어려운 낱말은 괄호 안에 쉬운 말로 풀이)\n현장 예시: (지하철 기관사 상황을 가정한 1~2문장. 가정이라는 것이 드러나게)\n" +
+      "시험 포인트:\n- (외워야 할 숫자·기간·주체·조건 2~4개)\n외우는 요령: (한 문장)\n원문에 없는 규정은 지어내지 마라.\n\n";
+    if (it.kind === "term") return head + "[출처] " + it.law.name + " " + it.art.no + "(정의)\n[용어] " + it.term + "\n[뜻] " + it.def;
+    return head + "[법령] " + it.law.name + "\n[조문] " + it.no + "(" + it.title + ")\n" + it.lines.join("\n");
+  }
+  async function runExplain(key, box) {
+    const out = $(".out", box), btn = $("button", box);
+    if (EXPL[key]) { out.textContent = EXPL[key]; btn.hidden = true; return; }
+    btn.disabled = true; btn.textContent = "설명을 만드는 중…";
+    try {
+      if (DB) {
+        const snap = await DB.doc("explain/" + key).get().catch(() => null);
+        if (snap && snap.exists && snap.data().text) { EXPL[key] = snap.data().text; saveExpl(); out.textContent = EXPL[key]; btn.hidden = true; return; }
+      }
+      out.textContent = "생각하는 중…";
+      const res = await SAMPLE(explainPrompt(key), { onText: ({ text }) => { out.textContent = text; }, modelTier: "default" });
+      EXPL[key] = res.text + (res.truncated ? "\n(설명이 길어 중간에 끊겼습니다.)" : "");
+      out.textContent = EXPL[key];
+      btn.hidden = true;
+      saveExpl();
+      if (DB) DB.doc("explain/" + key).set({ text: EXPL[key], at: now() }).catch(() => {});
+    } catch (e) {
+      const code = e && e.code;
+      out.textContent = code === "not_granted" || code === "sampling_disabled" || code === "not_declared" ? "AI 설명을 쓰려면 이 페이지의 AI 사용 권한을 허용해 주세요."
+        : code === "rate_limited" ? "사용량 한도에 걸렸습니다. 잠시 뒤 다시 눌러 주세요."
+        : code === "cancelled" ? "" : "설명을 만들지 못했습니다. 다시 눌러 보세요.";
+      btn.disabled = false; btn.textContent = "쉽게 풀어 설명 듣기";
+    }
+  }
+  function saveExpl() { try { localStorage.setItem(LS_EXPL, JSON.stringify(EXPL)); } catch (e) {} }
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-explain]");
+    if (b) runExplain(b.dataset.explain, b.closest(".explain"));
+  });
+  const KEYMAP = {};
+
+  // ---------- 배우기 ----------
+  let L = null; // 진행 중인 단원
+  function unitDone(u) { return !!S.units[u.id]; }
+  function nextUnit() { return COURSE.map((id) => UNITBY[id]).find((u) => !unitDone(u)) || null; }
+  function renderLearnHome() {
+    const nu = nextUnit();
+    const doneCount = UNITS.filter(unitDone).length;
+    const first = doneCount === 0;
+    let h = '<div class="card intro">' +
+      (first
+        ? '<h2>처음부터 차근차근</h2><ol><li>단원 하나는 조문 5개 이하로, 10분 안팎이면 끝납니다.</li><li>먼저 조문을 읽습니다. <b class="key">파란 글자</b>가 시험에 나오는 숫자·용어입니다. 어려우면 ‘쉽게 풀어 설명 듣기’를 누르세요.</li><li>읽은 직후 바로 확인 문제를 풉니다. 틀린 조문은 ‘복습 퀴즈’에 다시 나옵니다.</li><li>법마다 용어 익히기부터 시작합니다. 순서는 철도안전법 → 도시철도운전규칙 → 철도차량운전규칙 → 광역철도세칙 → 시행령 → 시행규칙입니다.</li></ol>'
+        : '<h2>이어서 배우기</h2><div class="hint">단원 ' + doneCount + "/" + UNITS.length + " 완료 · 매일 ‘복습 퀴즈’도 함께 푸세요.</div>") +
+      (nu ? '<button class="btn primary wide" data-unit="' + nu.id + '">' + (first ? "첫 단원 시작: " : "다음 단원: ") + esc(nu.law.short) + " · " + esc(nu.title) + "</button>" : '<div class="verdict ok">모든 단원을 끝냈습니다. 이제 복습 퀴즈로 다지세요.</div>') +
+      "</div>";
+    LAWS.forEach((law) => {
+      const us = UNITS.filter((u) => u.law === law);
+      const dn = us.filter(unitDone).length;
+      h += '<details class="lawgroup"' + (nu && nu.law === law ? " open" : "") + '><summary><span class="name">' + esc(law.short) + '</span><span class="cnt">' + dn + "/" + us.length + " 단원</span></summary><div class=\"units\">" +
+        us.map((u) => {
+          const r = S.units[u.id];
+          return '<button class="unit" data-unit="' + u.id + '"><span class="dot ' + (r ? "done" : nu === u ? "next" : "") + '">' + (r ? "✓" : "") + '</span><span><span class="ut">' + esc(u.title) + (u.kind === "terms" ? '<span class="tag">용어</span>' : "") + '</span><br><span class="us">' + esc(u.sub) + '</span></span><span class="sc">' + (r ? r.r + "/" + r.n : (u.kind === "terms" ? u.terms.length + "개" : u.arts.length + "조")) + "</span></button>";
+        }).join("") + "</div></details>";
+    });
+    $("#p-learn").innerHTML = h;
+  }
+  function startUnit(id) {
+    const u = UNITBY[id];
+    if (!u) return;
+    const steps = [];
+    if (u.kind === "terms") {
+      u.terms.forEach((t) => steps.push({ t: "term", x: t }));
+      shuffle(u.terms.slice()).forEach((t) => steps.push({ t: "tq", x: t, opts: termChoices(t) }));
+    } else {
+      u.arts.forEach((a) => {
+        steps.push({ t: "read", a });
+        const cs = pickCands(a, a.lines.length > 2 ? 2 : 1);
+        if (cs.length) cs.forEach((c) => steps.push({ t: "q", a, c, opts: shuffle([c.ans].concat(distractors(c))) }));
+        else steps.push({ t: "self", a });
+      });
+    }
+    steps.push({ t: "done" });
+    L = { u, steps, i: 0, r: 0, n: 0, picked: null };
+    show("learn", true);
+    renderStep();
+    window.scrollTo(0, 0);
+  }
+  function renderStep() {
+    const { u, steps, i } = L;
+    const s = steps[i];
+    const pct = Math.round((i / (steps.length - 1)) * 100);
+    let h = '<div class="card"><div class="lessonhead"><span class="t">' + esc(u.law.short) + " · " + esc(u.title) + '</span><span class="row"><span class="step">' + Math.min(i + 1, steps.length - 1) + "/" + (steps.length - 1) + '</span><button class="btn ghost small" id="quit">목록으로</button></span></div><div class="progress"><i style="width:' + pct + '%"></i></div>';
+    if (s.t === "read") {
+      const keys = [...new Set(candidates(s.a).map((c) => c.ans))].slice(0, 8);
+      h += refHtml(s.a) + fullText(s.a, { keys: true }) +
+        (keys.length ? '<div class="keys"><span class="lbl">외울 것</span>' + keys.map((k) => '<span class="k">' + esc(k) + "</span>").join("") + "</div>" : "") +
+        explainBox(s.a.key) +
+        '<div class="row end"><button class="btn primary" id="go">다 읽었어요</button></div>';
+    } else if (s.t === "q") {
+      h += qHtml(s.a, s.c, s.opts, L.picked, true);
+    } else if (s.t === "self") {
+      h += refHtml(s.a) + '<div class="hint">이 조문은 숫자나 핵심 용어가 없어 문제 대신 스스로 확인합니다. 내용을 내 말로 설명할 수 있나요?</div>' + fullText(s.a) +
+        '<div class="row end"><button class="btn bad" data-self="no">아직 모르겠어요</button><button class="btn good" data-self="ok">설명할 수 있어요</button></div>';
+    } else if (s.t === "term") {
+      const t = s.x;
+      h += '<div class="ref"><span class="law">' + esc(t.law.short) + '</span><span class="no">' + esc(t.art.no) + "</span><span>정의</span>" + lamps(t.id) + "</div>" +
+        '<div class="termface"><div class="term">' + esc(t.term) + '</div><div class="def">' + esc(t.def) + "</div></div>" + explainBox(t.key) +
+        '<div class="row end"><button class="btn primary" id="go">다음 용어</button></div>';
+    } else if (s.t === "tq") {
+      h += tqHtml(s.x, s.opts, L.picked, true);
+    } else {
+      const done = S.units[u.id];
+      const idx = COURSE.indexOf(u.id);
+      const nx = COURSE.slice(idx + 1).map((id) => UNITBY[id]).find((x) => !unitDone(x));
+      h += '<div class="empty"><div class="big">' + L.r + " / " + L.n + '</div><div>' + (L.n === 0 ? "단원을 끝냈습니다." : L.r === L.n ? "모두 맞혔습니다." : "틀린 조문은 복습 퀴즈에 다시 나옵니다.") + "</div>" +
+        '<div class="row">' + (nx ? '<button class="btn primary" data-unit="' + nx.id + '">다음 단원: ' + esc(nx.title) + "</button>" : "") + '<button class="btn" id="quit">단원 목록</button></div></div>';
+      if (!done) { S.units[u.id] = { d: now(), r: L.r, n: L.n }; touch(); }
+    }
+    h += "</div>";
+    $("#p-learn").innerHTML = h;
+    const go = $("#go") || $("#next"); if (go) go.focus({ preventScroll: true });
+  }
+  function qHtml(a, c, opts, picked, inLesson) {
+    const line = a.lines[c.li];
+    const done = picked !== null && picked !== undefined;
+    const ok = done && opts[picked] === c.ans;
+    const blankH = done ? '<span class="blank ' + (ok ? "ok" : "no") + '">' + esc(c.ans) + "</span>" : '<span class="blank">( ? )</span>';
+    const lead = c.li > 0 && !subLine(a.lines[0]) ? '<div class="lead">' + esc(a.lines[0].length > 110 ? a.lines[0].slice(0, 110) + "…" : a.lines[0]) + "</div>" : "";
+    return refHtml(a) + lead + '<div class="q">' + esc(line.slice(0, c.s)) + blankH + esc(line.slice(c.e)) + "</div>" + choicesHtml(opts, c.ans, picked) +
+      (done ? '<div class="verdict ' + (ok ? "ok" : "no") + '">' + (ok ? "정답입니다." : "정답은 ‘" + esc(c.ans) + "’입니다.") + "</div>" +
+        (inLesson ? "" : '<details class="full"><summary>조문 전체 보기</summary>' + fullText(a, { hl: c }) + "</details>" + explainBox(a.key)) +
+        '<div class="row end"><button class="btn primary" id="next">다음</button></div>'
+        : '<div class="hint">숫자 키 1–4로도 고를 수 있습니다.</div>');
+  }
+  function tqHtml(t, opts, picked) {
+    const done = picked !== null && picked !== undefined;
+    const ok = done && opts[picked] === t.term;
+    return '<div class="ref"><span class="law">' + esc(t.law.short) + '</span><span>용어 확인</span>' + lamps(t.id) + "</div>" +
+      '<div class="q">다음 뜻에 맞는 용어는?</div><div class="lead" style="font-size:.98rem;color:var(--ink)">' + esc(maskTerm(t)) + "</div>" + choicesHtml(opts, t.term, picked) +
+      (done ? '<div class="verdict ' + (ok ? "ok" : "no") + '">' + (ok ? "정답입니다." : "정답은 ‘" + esc(t.term) + "’입니다.") + '</div><div class="row end"><button class="btn primary" id="next">다음</button></div>' : "");
+  }
+  function choicesHtml(opts, ans, picked) {
+    const done = picked !== null && picked !== undefined;
+    return '<div class="choices">' + opts.map((o, i) => {
+      let cls = "choice";
+      if (done && o === ans) cls += " ok";
+      else if (done && i === picked) cls += " no";
+      return '<button class="' + cls + '" data-i="' + i + '"' + (done ? " disabled" : "") + '><span class="k">' + (i + 1) + "</span><span>" + esc(o) + "</span></button>";
+    }).join("") + "</div>";
+  }
+  function lessonAnswer(i) {
+    const s = L.steps[L.i];
+    if (L.picked !== null) return;
+    L.picked = i;
+    const ok = s.t === "q" ? s.opts[i] === s.c.ans : s.opts[i] === s.x.term;
+    L.n++; if (ok) L.r++;
+    if (s.t === "q") grade(s.a.id, ok ? "ok" : "no", "learn", s.c.ans);
+    else grade(s.x.id, ok ? "ok" : "no", "term", s.x.term);
+    renderStep();
+  }
+  function lessonNext() { L.i = Math.min(L.i + 1, L.steps.length - 1); L.picked = null; renderStep(); window.scrollTo(0, 0); }
+  $("#p-learn").addEventListener("click", (e) => {
+    const u = e.target.closest("[data-unit]");
+    if (u) { startUnit(u.dataset.unit); return; }
+    if (e.target.closest("#quit")) { L = null; renderLearnHome(); window.scrollTo(0, 0); return; }
+    if (!L) return;
+    const c = e.target.closest(".choice");
+    if (c && !c.disabled) { lessonAnswer(+c.dataset.i); return; }
+    const sf = e.target.closest("[data-self]");
+    if (sf) { grade(L.steps[L.i].a.id, sf.dataset.self, "self"); lessonNext(); return; }
+    if (e.target.closest("#go") || e.target.closest("#next")) lessonNext();
+  });
+
+  // ---------- 복습 퀴즈 ----------
+  let Q = null, lastQ = null, forced = null;
+  function quizItems() {
+    const learnedOnly = S.scope !== "all";
+    const arts = ARTS.filter((a) => active.has(a.law.id) && candidates(a).length && (!learnedOnly || st(a.id)));
+    const terms = TERMS.filter((t) => active.has(t.law.id) && (!learnedOnly || st(t.id)));
+    return arts.concat(terms);
+  }
+  function quizControls() {
+    return '<div class="chips">' + LAWS.map((L2) => '<button class="chip" aria-pressed="' + active.has(L2.id) + '" data-law="' + L2.id + '">' + esc(L2.short) + "</button>").join("") + "</div>" +
+      '<div class="chips"><button class="chip" aria-pressed="' + (S.scope !== "all") + '" data-scope="learned">배운 것만</button><button class="chip" aria-pressed="' + (S.scope === "all") + '" data-scope="all">전체 조문</button></div>';
+  }
   function nextQuiz() {
-    const p = pool().filter((a) => candidates(a).length);
-    const box = $("#p-quiz");
-    if (!p.length) { box.innerHTML = '<div class="card"><div class="empty">고른 법령에 빈칸 문제를 만들 조문이 없습니다. 위에서 법령을 더 골라 주세요.</div></div>'; return; }
-    let a = forced && p.includes(forced) ? forced : pickArticle(p, lastQuizArt);
+    const items = quizItems();
+    if (!items.length) {
+      $("#p-quiz").innerHTML = quizControls() + '<div class="card"><div class="empty"><div>' + (S.scope !== "all" ? "아직 배운 조문이 없습니다. ‘배우기’에서 단원을 하나 끝내면 여기서 복습할 수 있습니다." : "고른 법령에 낼 문제가 없습니다.") + '</div><button class="btn primary" data-goto="learn">배우기로 가기</button></div></div>';
+      return;
+    }
+    const it = forced && items.includes(forced) ? forced : pickDue(items, lastQ);
     forced = null;
-    lastQuizArt = a.id;
-    const cs = candidates(a);
-    let total = cs.reduce((n, c) => n + c.w, 0), r = Math.random() * total, c = cs[0];
-    for (const x of cs) { r -= x.w; if (r <= 0) { c = x; break; } }
-    const opts = shuffle([c.ans].concat(distractors(c)));
-    Q = { a, c, opts, done: false };
+    lastQ = it.id;
+    if (it.kind === "term") Q = { it, opts: termChoices(it), picked: null };
+    else { const c = pickCands(it, 1)[0]; Q = { it, c, opts: shuffle([c.ans].concat(distractors(c))), picked: null }; }
     renderQuiz();
   }
-  function renderQuiz(pickedIdx) {
-    const { a, c, opts, done } = Q;
-    const line = a.lines[c.li];
-    let blank = '<span class="blank">( ? )</span>';
-    let verdict = "";
-    if (done) {
-      const ok = opts[pickedIdx] === c.ans;
-      blank = '<span class="blank ' + (ok ? "ok" : "no") + '">' + esc(c.ans) + "</span>";
-      verdict = '<div class="verdict ' + (ok ? "ok" : "no") + '">' + (ok ? "정답입니다." : "틀렸습니다. 정답은 ‘" + esc(c.ans) + "’입니다.") + "</div>";
-    }
-    const lead = c.li > 0 ? '<div class="lead">' + esc(a.lines[0].length > 120 ? a.lines[0].slice(0, 120) + "…" : a.lines[0]) + "</div>" : "";
-    const choices = opts.map((o, i) => {
-      let cls = "choice";
-      if (done && o === c.ans) cls += " ok";
-      else if (done && i === pickedIdx) cls += " no";
-      return '<button class="' + cls + '" data-i="' + i + '"' + (done ? " disabled" : "") + '><span class="k">' + (i + 1) + "</span><span>" + esc(o) + "</span></button>";
-    }).join("");
-    $("#p-quiz").innerHTML =
-      '<div class="card">' + refHtml(a) + lead +
-      '<div class="q">' + esc(line.slice(0, c.s)) + blank + esc(line.slice(c.e)) + "</div>" +
-      '<div class="choices">' + choices + "</div>" + verdict +
-      (done ? '<details class="full"><summary>조문 전체 보기</summary>' + fullText(a, c) + "</details>" +
-        '<div class="row"><button class="btn primary" id="next">다음 문제</button><span class="hint">Enter 키로 넘어갑니다</span></div>'
-        : '<div class="hint">숫자 키 1–4로도 고를 수 있습니다.</div>') +
-      "</div>";
+  function renderQuiz() {
+    const due = quizItems().filter((x) => st(x.id) && st(x.id).d <= now()).length;
+    $("#p-quiz").innerHTML = quizControls() + '<div class="hint">지금 복습할 것 ' + due + "개</div>" + '<div class="card">' +
+      (Q.it.kind === "term" ? tqHtml(Q.it, Q.opts, Q.picked) : qHtml(Q.it, Q.c, Q.opts, Q.picked, false)) + "</div>";
+    const n = $("#next"); if (n) n.focus({ preventScroll: true });
   }
-  function answerQuiz(i) {
-    if (!Q || Q.done) return;
-    Q.done = true;
-    const ok = Q.opts[i] === Q.c.ans;
-    grade(Q.a, ok ? "ok" : "no", "q", Q.c.ans);
-    renderQuiz(i);
-    const n = $("#next"); if (n) n.focus();
+  function quizAnswer(i) {
+    if (!Q || Q.picked !== null) return;
+    Q.picked = i;
+    const ans = Q.it.kind === "term" ? Q.it.term : Q.c.ans;
+    grade(Q.it.id, Q.opts[i] === ans ? "ok" : "no", "q", ans);
+    renderQuiz();
   }
   $("#p-quiz").addEventListener("click", (e) => {
     const b = e.target.closest(".choice");
-    if (b) answerQuiz(+b.dataset.i);
-    if (e.target.closest("#next")) nextQuiz();
+    if (b && !b.disabled) { quizAnswer(+b.dataset.i); return; }
+    if (e.target.closest("#next")) { nextQuiz(); return; }
+    const lw = e.target.closest("[data-law]");
+    if (lw) { toggleLaw(lw.dataset.law); Q = null; nextQuiz(); return; }
+    const sc = e.target.closest("[data-scope]");
+    if (sc) { S.scope = sc.dataset.scope; touch(); Q = null; nextQuiz(); return; }
+    if (e.target.closest("[data-goto]")) show("learn");
   });
-
-  // ---------- 암기카드 ----------
-  let C = null, lastCardArt = null;
-  function nextCard() {
-    const p = pool();
-    if (!p.length) { $("#p-card").innerHTML = '<div class="card"><div class="empty">위에서 공부할 법령을 골라 주세요.</div></div>'; return; }
-    const a = pickArticle(p, lastCardArt);
-    lastCardArt = a.id;
-    C = { a, open: false };
-    renderCard();
+  function toggleLaw(id) {
+    if (active.has(id)) { if (active.size > 1) active.delete(id); } else active.add(id);
+    S.laws = [...active];
+    touch();
   }
-  function renderCard() {
-    const { a, open } = C;
-    $("#p-card").innerHTML =
-      '<div class="card">' + refHtml(a) +
-      '<div class="cardface"><div class="no">' + esc(a.law.short) + " " + esc(a.no) + '</div><div class="title">' + esc(a.title || "(제목 없음)") + "</div>" +
-      (open ? "" : '<div class="hint">내용을 떠올려 본 다음 펼쳐 보세요.</div>') + "</div>" +
-      (open ? fullText(a) +
-        '<div class="row"><button class="btn bad" data-g="no">몰랐어요</button><button class="btn warn" data-g="mid">헷갈려요</button><button class="btn good" data-g="ok">외웠어요</button></div>'
-        : '<div class="row"><button class="btn primary" id="flip">내용 보기</button><span class="hint">Space 키로 펼칩니다</span></div>') +
-      "</div>";
-  }
-  $("#p-card").addEventListener("click", (e) => {
-    if (e.target.closest("#flip")) { C.open = true; renderCard(); return; }
-    const g = e.target.closest("[data-g]");
-    if (g) { grade(C.a, g.dataset.g, "c"); nextCard(); }
-  });
 
   // ---------- 조문 찾기 ----------
   let browseLimit = 40;
   function renderBrowse() {
+    $("#browse-chips").innerHTML = LAWS.map((L2) => '<button class="chip" aria-pressed="' + active.has(L2.id) + '" data-law="' + L2.id + '">' + esc(L2.short) + "</button>").join("");
     const q = $("#q").value.trim();
-    const p = pool();
     const norm = (s) => s.replace(/\s+/g, "");
     const nq = norm(q);
-    const hits = !q ? p : p.filter((a) => norm(a.no + a.title).includes(nq) || a.lines.some((l) => norm(l).includes(nq)));
+    const pool = ARTS.filter((a) => active.has(a.law.id));
+    const hits = !q ? pool : pool.filter((a) => norm(a.no + a.title).includes(nq) || a.lines.some((l) => norm(l).includes(nq)));
     const shown = hits.slice(0, browseLimit);
-    const hl = (s) => {
-      if (!q) return esc(s);
-      const i = s.indexOf(q);
-      return i < 0 ? esc(s) : esc(s.slice(0, i)) + "<mark>" + esc(q) + "</mark>" + esc(s.slice(i + q.length));
-    };
+    const hl = (s) => { if (!q) return esc(s); const i = s.indexOf(q); return i < 0 ? esc(s) : esc(s.slice(0, i)) + "<mark>" + esc(q) + "</mark>" + esc(s.slice(i + q.length)); };
     $("#results").innerHTML = (hits.length ? '<div class="hint">' + hits.length + "개 조문</div>" : '<div class="empty">찾는 조문이 없습니다. 다른 낱말로 검색해 보세요.</div>') +
-      shown.map((a) => '<details class="item"><summary><span class="lawtag">' + esc(a.law.short) + '</span><span class="no">' + esc(a.no) + '</span><span class="t">' + hl(a.title) + "</span>" + lamps(a.id) + "</summary>" +
-        '<div class="arttext">' + a.lines.map((l) => "<p>" + hl(l) + "</p>").join("") + "</div>" +
-        '<div class="row" style="padding-top:8px"><button class="btn small" data-quiz="' + esc(a.id) + '">이 조문으로 퀴즈</button></div></details>').join("") +
+      shown.map((a) => '<details class="item"><summary><span class="lawtag">' + esc(a.law.short) + '</span><span class="no">' + esc(a.no) + '</span><span class="t">' + hl(a.title) + pendTag(a) + "</span>" + lamps(a.id) + "</summary>" +
+        '<div class="arttext" style="padding-top:8px">' + a.lines.map((l) => '<p class="' + (subLine(l) ? "sub" : "") + '">' + hl(l) + "</p>").join("") + "</div>" + explainBox(a.key) +
+        (candidates(a).length ? '<div class="row" style="padding-top:8px"><button class="btn small" data-quiz="' + esc(a.id) + '">이 조문으로 문제 풀기</button></div>' : "") + "</details>").join("") +
       (hits.length > shown.length ? '<button class="btn" id="more">더 보기 (' + (hits.length - shown.length) + "개 남음)</button>" : "");
   }
   let searchTimer = null;
   $("#q").addEventListener("input", () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { browseLimit = 40; renderBrowse(); }, 150); });
-  $("#results").addEventListener("click", (e) => {
+  $("#p-browse").addEventListener("click", (e) => {
     if (e.target.closest("#more")) { browseLimit += 40; renderBrowse(); return; }
+    const lw = e.target.closest("[data-law]");
+    if (lw) { toggleLaw(lw.dataset.law); browseLimit = 40; renderBrowse(); return; }
     const b = e.target.closest("[data-quiz]");
     if (b) quizOn(b.dataset.quiz);
   });
   function quizOn(id) {
-    const a = BYID[id];
-    if (!a) return;
-    if (!candidates(a).length) { alertInline("이 조문에는 빈칸으로 낼 숫자나 용어가 없어 암기카드로 엽니다."); C = { a, open: false }; show("card", true); renderCard(); return; }
-    forced = a; show("quiz", true); nextQuiz();
+    const it = BYID[id];
+    if (!it) return;
+    if (!active.has(it.law.id)) { active.add(it.law.id); S.laws = [...active]; }
+    if (S.scope !== "all" && !st(id)) S.scope = "all";
+    forced = it; show("quiz", true); nextQuiz();
   }
-  function alertInline(t) { setSaveNote(t); setTimeout(() => setSaveNote(dbRef ? "기록이 클라우드에 저장됩니다." : "기록은 이 기기에만 저장됩니다."), 4000); }
 
   // ---------- 내 기록 ----------
   let confirmReset = false;
   function renderStats() {
-    const rows = LAWS.map((L) => {
-      const arts = ARTS.filter((a) => a.law.id === L.id);
-      let seen = 0, r = 0, w = 0, mastered = 0;
-      arts.forEach((a) => { const s = st(a.id); if (s) { seen++; r += s.r; w += s.w; if (s.b >= 3) mastered++; } });
-      const acc = r + w ? Math.round((r / (r + w)) * 100) : null;
-      return { L, total: arts.length, seen, mastered, acc };
+    const rows = LAWS.map((law) => {
+      const items = ARTS.filter((a) => a.law === law).concat(TERMS.filter((t) => t.law === law));
+      let r = 0, w = 0, seen = 0;
+      items.forEach((x) => { const s = st(x.id); if (s) { seen++; r += s.r; w += s.w; } });
+      const us = UNITS.filter((u) => u.law === law);
+      return { law, seen, total: items.length, acc: r + w ? Math.round((r / (r + w)) * 100) : null, ud: us.filter(unitDone).length, ut: us.length };
     });
-    const d = S.days[today()] || [0, 0];
+    const d = S.days[dayKey(now())] || [0, 0];
     let streak = 0;
-    for (let i = 0; ; i++) { const t = new Date(now() - i * DAY); const k = t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") + "-" + String(t.getDate()).padStart(2, "0"); if (S.days[k]) streak++; else if (i > 0) break; if (i > 400) break; }
-    const dueCount = ARTS.filter((a) => st(a.id) && st(a.id).d <= now()).length;
-    const weak = ARTS.filter((a) => st(a.id) && st(a.id).w > 0).sort((x, y) => (st(y.id).w - st(y.id).r * 0.5) - (st(x.id).w - st(x.id).r * 0.5)).slice(0, 10);
+    for (let i = 0; i < 400; i++) { if (S.days[dayKey(now() - i * DAY)]) streak++; else if (i > 0) break; }
+    const all = ARTS.concat(TERMS);
+    const weak = all.filter((x) => st(x.id) && st(x.id).w > 0).sort((x, y) => (st(y.id).w - st(y.id).r * 0.5) - (st(x.id).w - st(x.id).r * 0.5)).slice(0, 10);
     $("#p-stats").innerHTML =
-      '<div class="tiles">' +
-      '<div class="tile"><span class="lbl">오늘 푼 문제</span><span class="big">' + d[0] + "</span></div>" +
-      '<div class="tile"><span class="lbl">오늘 정답률</span><span class="big">' + (d[0] ? Math.round((d[1] / d[0]) * 100) + "%" : "–") + "</span></div>" +
-      '<div class="tile"><span class="lbl">연속 공부</span><span class="big">' + streak + "일</span></div></div>" +
-      '<div class="card"><h2>법령별 정답률</h2><div class="hint">세로선이 과락선 60점입니다. 철도 관련 법은 60점 미만이면 과락입니다.</div><div class="stats">' +
-      rows.map((x) => '<div class="lawstat"><div class="head"><span>' + esc(x.L.short) + '</span><span class="num">본 조문 ' + x.seen + "/" + x.total + " · 3단계 이상 " + x.mastered + " · 정답률 " + (x.acc === null ? "–" : x.acc + "%") + '</span></div><div class="bar"><div class="fill ' + (x.acc === null ? "" : x.acc >= 60 ? "pass" : "fail") + '" style="width:' + (x.acc || 0) + '%"></div><div class="cut"></div></div></div>').join("") +
+      '<div class="tiles"><div class="tile"><span class="lbl">오늘 푼 문제</span><span class="big">' + d[0] + '</span></div><div class="tile"><span class="lbl">오늘 정답률</span><span class="big">' + (d[0] ? Math.round((d[1] / d[0]) * 100) + "%" : "–") + '</span></div><div class="tile"><span class="lbl">연속 공부</span><span class="big">' + streak + "일</span></div></div>" +
+      '<div class="card"><h2>법령별 진도와 정답률</h2><div class="hint">세로선은 과락선 60점입니다. 철도 관련 법은 60점 미만이면 과락입니다.</div><div class="stats">' +
+      rows.map((x) => '<div class="lawstat"><div class="head"><span>' + esc(x.law.short) + '</span><span class="num">단원 ' + x.ud + "/" + x.ut + " · 정답률 " + (x.acc === null ? "–" : x.acc + "%") + '</span></div><div class="bar"><div class="fill ' + (x.acc === null ? "" : x.acc >= 60 ? "pass" : "fail") + '" style="width:' + (x.acc || 0) + '%"></div><div class="cut"></div></div></div>').join("") +
       "</div></div>" +
-      '<div class="card"><h2>자주 틀린 조문</h2>' +
-      (weak.length ? '<div class="weak">' + weak.map((a) => '<div class="w"><span><span class="lawtag" style="color:var(--accent);font-weight:700;font-size:.75rem">' + esc(a.law.short) + "</span> " + esc(a.no) + " " + esc(a.title) + '</span><span class="row"><span class="cnt">틀림 ' + st(a.id).w + " · 맞힘 " + st(a.id).r + '</span><button class="btn small" data-quiz="' + esc(a.id) + '">다시 풀기</button></span></div>').join("") + "</div>"
-        : '<div class="empty">아직 틀린 조문이 없습니다. 빈칸 퀴즈를 풀면 여기에 쌓입니다.</div>') +
-      "</div>" +
-      '<div class="card"><div class="hint">지금 복습할 조문 ' + dueCount + "개 · 기록 " + Object.keys(S.arts).length + '개 조문</div><div class="row">' +
-      (confirmReset ? '<span>기록을 모두 지울까요? 되돌릴 수 없습니다.</span><button class="btn bad small" id="reset-yes">모두 지우기</button><button class="btn small" id="reset-no">취소</button>'
-        : '<button class="btn small" id="reset">기록 초기화</button>') + "</div></div>";
+      '<div class="card"><h2>자주 틀린 것</h2>' +
+      (weak.length ? '<div class="weak">' + weak.map((x) => '<div class="w"><span><span class="lawtag">' + esc(x.law.short) + "</span> " + (x.kind === "term" ? "용어 · " + esc(x.term) : esc(x.no) + " " + esc(x.title)) + '</span><span class="row"><span class="cnt">틀림 ' + st(x.id).w + " · 맞힘 " + st(x.id).r + '</span><button class="btn small" data-quiz="' + esc(x.id) + '">다시 풀기</button></span></div>').join("") + "</div>"
+        : '<div class="empty">아직 틀린 것이 없습니다. 배우기와 복습 퀴즈를 풀면 여기에 쌓입니다.</div>') + "</div>" +
+      '<div class="card"><div class="row">' + (confirmReset ? '<span>기록을 모두 지울까요? 되돌릴 수 없습니다.</span><button class="btn bad small" id="reset-yes">모두 지우기</button><button class="btn small" id="reset-no">취소</button>' : '<button class="btn small" id="reset">기록 초기화</button>') + "</div></div>";
   }
   $("#p-stats").addEventListener("click", (e) => {
     const b = e.target.closest("[data-quiz]");
     if (b) { quizOn(b.dataset.quiz); return; }
     if (e.target.closest("#reset")) { confirmReset = true; renderStats(); }
     else if (e.target.closest("#reset-no")) { confirmReset = false; renderStats(); }
-    else if (e.target.closest("#reset-yes")) { confirmReset = false; S.arts = {}; S.log = []; S.days = {}; touch(); renderToday(); renderStats(); }
+    else if (e.target.closest("#reset-yes")) { confirmReset = false; const keep = { laws: S.laws, scope: S.scope }; S = Object.assign(blank(), keep); touch(); renderToday(); renderStats(); }
   });
 
   // ---------- 공통 ----------
-  let tab = "quiz";
+  let tab = "learn";
   function show(t, keep) {
     tab = t;
     document.querySelectorAll("nav.tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === t)));
-    ["quiz", "card", "browse", "stats"].forEach((k) => ($("#p-" + k).hidden = k !== t));
+    ["learn", "quiz", "browse", "stats"].forEach((k) => ($("#p-" + k).hidden = k !== t));
     if (keep) return;
-    if (t === "quiz" && (!Q || Q.done)) nextQuiz();
-    if (t === "card" && !C) nextCard();
+    if (t === "learn") { if (L) renderStep(); else renderLearnHome(); }
+    if (t === "quiz") { if (!Q || Q.picked !== null) nextQuiz(); else renderQuiz(); }
     if (t === "browse") renderBrowse();
     if (t === "stats") renderStats();
   }
+  function rerender() { active = new Set(S.laws && S.laws.length ? S.laws : LAWS.map((x) => x.id)); renderToday(); show(tab); }
   document.querySelector("nav.tabs").addEventListener("click", (e) => { const b = e.target.closest("button[data-tab]"); if (b) show(b.dataset.tab); });
-  function renderToday() { const d = S.days[today()] || [0, 0]; $("#today").textContent = "오늘 " + d[0] + "문제 · 정답 " + d[1]; }
-  function applyLawFilter() { active = new Set(S.laws && S.laws.length ? S.laws : LAWS.map((L) => L.id)); }
-  function renderChips() {
-    $("#chips").innerHTML = LAWS.map((L) => '<button class="chip" aria-pressed="' + active.has(L.id) + '" data-law="' + L.id + '">' + esc(L.short) + "</button>").join("");
-  }
-  $("#chips").addEventListener("click", (e) => {
-    const b = e.target.closest("[data-law]");
-    if (!b) return;
-    const id = b.dataset.law;
-    if (active.has(id)) { if (active.size > 1) active.delete(id); } else active.add(id);
-    S.laws = [...active];
-    touch();
-    renderChips();
-    Q = null; C = null;
-    refresh();
-  });
-  function refresh() {
-    if (tab === "quiz") { if (!Q || Q.done || !active.has(Q.a.law.id)) nextQuiz(); else renderQuiz(); }
-    else if (tab === "card") { if (!C || !active.has(C.a.law.id)) nextCard(); else renderCard(); }
-    else if (tab === "browse") renderBrowse();
-    else renderStats();
-    renderToday();
-  }
+  function renderToday() { const d = S.days[dayKey(now())] || [0, 0]; $("#today").textContent = "오늘 " + d[0] + "문제 · 정답 " + d[1]; }
   document.addEventListener("keydown", (e) => {
     if (e.target.matches("input, textarea")) return;
-    if (tab === "quiz" && Q) {
-      if (!Q.done && /^[1-4]$/.test(e.key)) { e.preventDefault(); answerQuiz(+e.key - 1); }
-      else if (Q.done && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); nextQuiz(); }
-    } else if (tab === "card" && C) {
-      if (!C.open && (e.key === " " || e.key === "Enter")) { e.preventDefault(); C.open = true; renderCard(); }
-      else if (C.open && /^[1-3]$/.test(e.key)) { grade(C.a, ["no", "mid", "ok"][+e.key - 1], "c"); nextCard(); }
+    if (tab === "learn" && L) {
+      const s = L.steps[L.i];
+      if ((s.t === "q" || s.t === "tq") && L.picked === null && /^[1-4]$/.test(e.key)) { e.preventDefault(); lessonAnswer(+e.key - 1); }
+      else if (e.key === "Enter" && (s.t === "read" || s.t === "term" || L.picked !== null) && s.t !== "done") { e.preventDefault(); lessonNext(); }
+    } else if (tab === "quiz" && Q) {
+      if (Q.picked === null && /^[1-4]$/.test(e.key)) { e.preventDefault(); quizAnswer(+e.key - 1); }
+      else if (Q.picked !== null && e.key === "Enter") { e.preventDefault(); nextQuiz(); }
     }
   });
 
   fetch("data.json").then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).then((data) => {
     LAWS = data.laws;
-    LAWS.forEach((L) => L.arts.forEach(([no, title, lines]) => {
-      const a = { id: L.id + ":" + no, law: L, no, title, lines };
-      ARTS.push(a); BYID[a.id] = a;
-    }));
-    buildPools();
-    applyLawFilter();
-    renderChips();
-    renderToday();
-    nextQuiz();
+    LAWS.forEach((law) => {
+      LAWBY[law.id] = law;
+      law.list = law.arts.map(([no, title, lines, key, pending]) => {
+        const a = { kind: "art", id: law.id + ":" + no, key, law, no, title, lines, pending };
+        ARTS.push(a); BYID[a.id] = a; KEYMAP[key] = a;
+        return a;
+      });
+    });
+    data.units.forEach((u) => {
+      const law = LAWBY[u.law];
+      const unit = { id: u.id, law, kind: u.kind, title: u.title, sub: u.sub };
+      if (u.kind === "terms") unit.terms = u.terms.map(([term, def, ai], n) => {
+        const t = { kind: "term", id: "term:" + law.id + ":" + term, key: u.id + "-" + (n + 1), law, term, def, art: law.list[ai] };
+        TERMS.push(t); BYID[t.id] = t; KEYMAP[t.key] = t;
+        return t;
+      });
+      else unit.arts = u.arts.map((i) => law.list[i]);
+      UNITS.push(unit); UNITBY[u.id] = unit;
+    });
+    COURSE = data.course;
+    ARTS.forEach((a) => candidates(a).forEach((c) => { if (c.grp.startsWith("n:") || c.grp === "frac") (NUMPOOL[c.grp] = NUMPOOL[c.grp] || new Set()).add(c.ans.replace(/\s+/g, "")); }));
+    rerender();
     connectDb();
+    if (window.claude && window.claude.use) window.claude.use("sample").then((s) => { if (s) { SAMPLE = s; if (tab === "learn") show("learn"); } }).catch(() => {});
   }).catch(() => {
-    $("#p-quiz").innerHTML = '<div class="card"><div class="empty">법령 원문을 불러오지 못했습니다. 페이지를 새로고침해 주세요.</div></div>';
+    $("#p-learn").innerHTML = '<div class="card"><div class="empty">법령 원문을 불러오지 못했습니다. 페이지를 새로고침해 주세요.</div></div>';
   });
 })();
 </script>
