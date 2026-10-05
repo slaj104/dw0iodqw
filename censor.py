@@ -51,6 +51,7 @@ class CensorOptions:
     blur_strength: int = 0          # 블러 커널 크기 (0 = 자동)
     color: tuple[int, int, int] = (0, 0, 0)  # 칠하기 색상 (BGR)
     use_box: bool = False           # 세그멘테이션 대신 박스 영역 전체를 가림
+    penis_pad: float = 0.2          # 음경 영역 추가 확장 (검출 크기 대비 비율). 모델에 고환 클래스가 없어 주변까지 덮기 위함
     extra: dict = field(default_factory=dict)
 
 
@@ -111,13 +112,21 @@ class Censor:
         polys = r.masks.xy if (r.masks is not None and not opts.use_box) else None
 
         for i, (c, p, b) in enumerate(zip(cls, confs, boxes)):
-            detections.append({"class": self.names[c], "conf": round(p, 3), "box": b.tolist()})
+            name = self.names[c]
+            detections.append({"class": name, "conf": round(p, 3), "box": b.tolist()})
+            m = np.zeros((h, w), np.uint8)
             poly = polys[i] if polys is not None else None
             if poly is not None and len(poly) >= 3:
-                cv2.fillPoly(mask, [poly.astype(np.int32)], 255)
+                cv2.fillPoly(m, [poly.astype(np.int32)], 255)
             else:
                 x1, y1, x2, y2 = b
-                cv2.rectangle(mask, (x1, y1), (x2, y2), 255, -1)
+                cv2.rectangle(m, (x1, y1), (x2, y2), 255, -1)
+            if name == "penis" and opts.penis_pad > 0:
+                pad = round(max(b[2] - b[0], b[3] - b[1]) * opts.penis_pad)
+                if pad > 0:
+                    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (pad * 2 + 1, pad * 2 + 1))
+                    m = cv2.dilate(m, k)
+            mask |= m
 
         expand = opts.expand if opts.expand >= 0 else max(2, round(max(h, w) * 0.006))
         if expand > 0:
@@ -241,6 +250,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--pubic-hair", action="store_true", help="음모도 함께 가리기")
     ap.add_argument("--nipple", action="store_true", help="유두도 함께 가리기 (기본은 가리지 않음)")
     ap.add_argument("--box", action="store_true", help="윤곽 대신 검출 박스 전체를 가리기")
+    ap.add_argument("--penis-pad", type=float, default=0.2,
+                    help="음경 주변(고환 등) 추가로 덮는 비율, 검출 크기 대비 (기본 0.2, 0 = 끔)")
     ap.add_argument("--format", default=None, help="출력 확장자 강제 (예: png, jpg, webp)")
     ap.add_argument("-r", "--recursive", action="store_true", help="하위 폴더까지 처리")
     ap.add_argument("--device", default=None, help="cpu / 0 (GPU 번호) 등")
@@ -256,7 +267,7 @@ def main(argv: list[str] | None = None) -> int:
     opts = CensorOptions(
         mode=args.mode, classes=tuple(classes), conf=args.conf, expand=args.expand,
         mosaic_size=args.mosaic_size, blur_strength=args.blur,
-        color=parse_color(args.color), use_box=args.box,
+        color=parse_color(args.color), use_box=args.box, penis_pad=args.penis_pad,
     )
 
     src = Path(args.input)

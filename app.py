@@ -20,7 +20,7 @@ MODELS_DIR = Path(__file__).parent / "models"
 _cache: dict[str, Censor] = {}
 
 MODE_LABELS = {"모자이크": "mosaic", "블러": "blur", "색칠": "fill"}
-CLASS_LABELS = {"항문": "anus", "음경": "penis", "음부": "vagina", "음모": "pubic hair", "유두": "nipple"}
+CLASS_LABELS = {"항문 (남녀)": "anus", "남자 성기": "penis", "여자 성기": "vagina", "음모": "pubic hair", "유두": "nipple"}
 
 
 def get_censor(model: str) -> Censor:
@@ -29,29 +29,29 @@ def get_censor(model: str) -> Censor:
     return _cache[model]
 
 
-def build_opts(mode, classes, conf, expand, mosaic, blur, color, use_box) -> CensorOptions:
+def build_opts(mode, classes, conf, expand, mosaic, blur, color, use_box, penis_pad) -> CensorOptions:
     return CensorOptions(
         mode=MODE_LABELS[mode],
         classes=tuple(CLASS_LABELS[c] for c in classes),
         conf=conf, expand=int(expand), mosaic_size=int(mosaic), blur_strength=int(blur),
-        color=parse_color(color or "#000000"), use_box=use_box,
+        color=parse_color(color or "#000000"), use_box=use_box, penis_pad=penis_pad,
     )
 
 
-def run_single(image, model, mode, classes, conf, expand, mosaic, blur, color, use_box):
+def run_single(image, model, mode, classes, conf, expand, mosaic, blur, color, use_box, penis_pad):
     if image is None:
         return None, "이미지를 올려주세요."
     bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-    out, dets = get_censor(model).process(bgr, build_opts(mode, classes, conf, expand, mosaic, blur, color, use_box))
+    out, dets = get_censor(model).process(bgr, build_opts(mode, classes, conf, expand, mosaic, blur, color, use_box, penis_pad))
     info = "\n".join(f"{d['class']}  conf={d['conf']:.2f}  box={d['box']}" for d in dets) or "검출 없음"
     return cv2.cvtColor(out, cv2.COLOR_BGR2RGB), info
 
 
-def run_batch(files, model, mode, classes, conf, expand, mosaic, blur, color, use_box):
+def run_batch(files, model, mode, classes, conf, expand, mosaic, blur, color, use_box, penis_pad):
     if not files:
         return None, "파일을 올려주세요."
     censor = get_censor(model)
-    opts = build_opts(mode, classes, conf, expand, mosaic, blur, color, use_box)
+    opts = build_opts(mode, classes, conf, expand, mosaic, blur, color, use_box, penis_pad)
     tmp = Path(tempfile.mkdtemp(prefix="censored_"))
     log = []
     for f in files:
@@ -71,7 +71,7 @@ def run_batch(files, model, mode, classes, conf, expand, mosaic, blur, color, us
 
 
 with gr.Blocks(title="NSFW 자동 검열기") as demo:
-    gr.Markdown("## 애니 NSFW 자동 검열기\n성기·항문 영역을 찾아 모자이크 / 블러 / 색칠로 가립니다. (유두는 기본 제외)")
+    gr.Markdown("## 애니 NSFW 자동 검열기\n남녀 성기·항문 영역을 찾아 모자이크 / 블러 / 색칠로 가립니다. (유두는 기본 제외)")
 
     with gr.Row():
         with gr.Column(scale=1):
@@ -86,6 +86,7 @@ with gr.Blocks(title="NSFW 자동 검열기") as demo:
             mosaic = gr.Slider(0, 80, value=0, step=1, label="모자이크 크기 px (0 = 자동)")
             blur = gr.Slider(0, 301, value=0, step=2, label="블러 강도 (0 = 자동)")
             color = gr.ColorPicker(value="#000000", label="색칠 색상")
+            penis_pad = gr.Slider(0, 1, value=0.2, step=0.05, label="남자 성기 주변(고환 등) 추가로 덮기 비율")
             use_box = gr.Checkbox(False, label="윤곽 대신 사각형 박스 전체 가리기")
 
         with gr.Column(scale=2):
@@ -101,7 +102,7 @@ with gr.Blocks(title="NSFW 자동 검열기") as demo:
                 zipout = gr.File(label="결과 ZIP")
                 log = gr.Textbox(label="로그", lines=8)
 
-    params = [model, mode, classes, conf, expand, mosaic, blur, color, use_box]
+    params = [model, mode, classes, conf, expand, mosaic, blur, color, use_box, penis_pad]
     btn.click(run_single, [inp, *params], [out, info])
     btn2.click(run_batch, [files, *params], [zipout, log])
 
