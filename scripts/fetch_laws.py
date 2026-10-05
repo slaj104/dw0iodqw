@@ -39,8 +39,24 @@ def curl(url, data=None, binary=False):
     raise RuntimeError(f"다운로드 실패: {url}")
 
 
+# 조문 안에 그림으로 들어간 글자(한자 등). 그림 번호 -> 글자
+INLINE_GLYPHS = {"117710477": "燒燬"}
+FIGS = {}  # 그림 번호 -> 대체 텍스트(표 내용)
+
+
+def img_marker(m):
+    seq = m.group(2)
+    if seq in INLINE_GLYPHS:
+        return INLINE_GLYPHS[seq]
+    alt = re.search(r'alt="([^"]*)"', m.group(1) + m.group(3))
+    FIGS[seq] = html.unescape(alt.group(1)).strip() if alt else ""
+    return f" {{{{그림:{seq}}}}} "
+
+
 def clean(fragment):
-    t = re.sub(r"<[^>]+>", "", fragment)
+    # 조문 속 표·그림은 {{그림:번호}} 표시로 남기고 그림 파일은 따로 받는다
+    t = re.sub(r'<img([^>]*)src="/LSW/flDownload\.do\?flSeq=(\d+)"([^>]*)>', img_marker, fragment)
+    t = re.sub(r"<[^>]+>", "", t)
     t = html.unescape(t).replace("\xa0", " ")
     return re.sub(r"\s+", " ", t).strip()
 
@@ -125,13 +141,30 @@ def fetch_byl(body, name, seen):
     return out
 
 
+def fetch_figs(seqs):
+    d = OUT / "그림"
+    d.mkdir(exist_ok=True)
+    out = {}
+    for seq in seqs:
+        raw = curl(f"{BASE}/LSW/flDownload.do?flSeq={seq}", binary=True)
+        ext = "gif" if raw[:3] == b"GIF" else "bmp" if raw[:2] == b"BM" else "png" if raw[:4] == b"\x89PNG" else "jpg"
+        (d / f"{seq}.{ext}").write_bytes(raw)
+        if ext == "bmp" and subprocess.run(["which", "convert"], capture_output=True).returncode == 0:
+            subprocess.run(["convert", str(d / f"{seq}.bmp"), str(d / f"{seq}.png")], check=False)
+            (d / f"{seq}.bmp").unlink()
+            ext = "png"
+        out[seq] = {"file": f"그림/{seq}.{ext}", "alt": FIGS.get(seq, "")}
+    return out
+
+
 def write_md(name, data):
     md = [f"# {data['title']}", "", f"- {data['info']}" if data["info"] else "", f"- 시행일: {data['efYd']}", f"- 출처: {data['source']}", ""]
     for a in data["articles"]:
         md += [f"### {a['no']}({a['title']})" if a["title"] else f"### {a['no']}", ""]
         if a.get("pending"):
             md += [f"> {a['pending']} 시행 예정인 개정 내용이 반영된 조문입니다.", ""]
-        md += [a["text"].replace("\n", "\n\n"), ""]
+        text = re.sub(r"\{\{그림:(\d+)\}\}", lambda m: f"\n\n![표]({data.get('figs', {}).get(m.group(1), {}).get('file', '')})\n\n", a["text"])
+        md += [text.replace("\n", "\n\n").replace("\n\n\n\n", "\n\n"), ""]
     if data["appendices"]:
         md += ["## 별표", ""] + [f"- [{b['no']}] {b['title']} — [PDF]({b['pdf']}) · [텍스트]({b['txt']})" for b in data["appendices"]]
     (OUT / f"{name}.md").write_text("\n".join(md), encoding="utf-8")
@@ -148,11 +181,13 @@ def main():
                     data=f"lsiSeq={seq}&chrClsCd=010202&efYd={efyd}&ancYnChk=0&nwJoYnInfo=Y&efGubun=Y&vSct=*")
         title = clean(re.search(r"<h2[^>]*>(.*?)</h2>", body, re.S).group(1)) if "<h2" in body else name
         info = clean(m.group(1)) if (m := re.search(r'<div class="ct_sub">(.*?)</div>', body, re.S)) else ""
+        FIGS.clear()
         arts = split_pending(parse_articles(body))
+        figs = fetch_figs([sq for sq in FIGS if any(f"{{{{그림:{sq}}}}}" in a["text"] for a in arts)])
         print(f"{name}: 조문 {len(arts)}개 (시행 {efyd})")
         bylpo = fetch_byl(body, name, set())
         data = {"law": name, "title": title, "info": info, "lsiSeq": seq, "efYd": efyd,
-                "source": f"{BASE}/법령/{name}", "articles": arts, "appendices": bylpo}
+                "source": f"{BASE}/법령/{name}", "articles": arts, "appendices": bylpo, "figs": figs}
         (OUT / f"{name}.json").write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
         write_md(name, data)
         index.append({"law": name, "efYd": efyd, "articles": len(arts), "appendices": len(bylpo)})

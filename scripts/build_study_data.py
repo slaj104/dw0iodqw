@@ -7,6 +7,7 @@
 """
 import json
 import re
+import shutil
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -51,9 +52,16 @@ def chunks(items, size):
 
 
 def main():
-    out = {"laws": [], "units": [], "course": []}
+    out = {"laws": [], "units": [], "course": [], "figs": {}}
+    imgdir = ROOT / "app" / "img"
+    shutil.rmtree(imgdir, ignore_errors=True)
+    imgdir.mkdir(parents=True)
     for lid, fname, short in LAWS:
         d = json.loads((ROOT / "laws" / f"{fname}.json").read_text(encoding="utf-8"))
+        for seq, f in d.get("figs", {}).items():
+            src = ROOT / "laws" / f["file"]
+            shutil.copy(src, imgdir / src.name)
+            out["figs"][seq] = {"src": f"img/{src.name}", "alt": f["alt"]}
         arts, terms = [], []
         for a in d["articles"]:
             lines = [clean_line(x) for x in a["text"].split("\n")]
