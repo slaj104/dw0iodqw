@@ -6,8 +6,9 @@ RS.Physics = (function () {
   const G = 9.81;
 
   const P = {
-    maxAccel: 3.0 / KMH,     // 기동가속도 3.0 km/h/s (만차 기준 아님, 공차 근사)
-    basePowerSpeed: 40,      // 정출력 영역 시작 속도(km/h)
+    maxAccel: 3.0 / KMH,     // 기동가속도 3.0 km/h/s (정토크 영역)
+    basePowerSpeed: 35,      // 정토크 → 정출력 전환 속도(km/h)
+    charSpeed: 70,           // 정출력 → 특성 영역(가속도 ∝ 1/V²) 전환 속도(km/h)
     brakeStep: 0.5 / KMH,    // 상용제동 1노치당 0.5 km/h/s → B7 = 3.5 km/h/s
     ebDecel: 4.5 / KMH,      // 비상제동 4.5 km/h/s
     brakeApplyRate: 0.9,     // 제동력 상승률 (m/s³)  ─ 공기제동 응답지연 모사
@@ -29,16 +30,26 @@ RS.Physics = (function () {
     return P.brakeStep * (-n);
   }
 
-  // 주행저항 (m/s²), v: m/s
-  function resistance(v) {
+  // 주행저항 (m/s²), v: m/s — 터널 안에서는 공기저항 항이 커짐 (터널 저항 계수 1.6)
+  function resistance(v, tunnel) {
     const k = v * KMH;
-    return 0.008 + 0.00008 * k + 0.0000025 * k * k;
+    return 0.008 + 0.00008 * k + 0.0000025 * k * k * (tunnel ? 1.6 : 1);
   }
 
+  // 견인 특성: 정토크(0~35) → 정출력(35~70, a∝1/V) → 특성 영역(70~, a∝1/V²)
   function tractionMax(v, loadFactor) {
-    const k = Math.max(v * KMH, 1);
-    const a = P.maxAccel * Math.min(1, P.basePowerSpeed / k);
+    const k = Math.max(v * KMH, 1), b = P.basePowerSpeed, c = P.charSpeed;
+    let a = P.maxAccel;
+    if (k > c) a *= (b / c) * (c / k) * (c / k);
+    else if (k > b) a *= b / k;
     return a / loadFactor; // 응하중 제동과 달리 역행은 하중에 따라 가속도 감소
+  }
+
+  // 저속에서 회생제동이 줄고 공기제동(제륜자)으로 넘어가며 마찰계수가 커져 감속도가 약간 증가
+  // (교재: 정차 직전 1단으로 충격 방지)
+  function brakeFactor(v) {
+    const k = v * KMH;
+    return k < 12 ? 1 + 0.18 * (1 - k / 12) : 1;
   }
 
   function makeState(s) {
@@ -49,7 +60,7 @@ RS.Physics = (function () {
     return { s: st.s, v: st.v, bAct: st.bAct, tAct: st.tAct, bDelay: st.bDelay, lastBCmd: st.lastBCmd };
   }
 
-  // env: { loadFactor, tractionCut(bool), gradeAt(u) }
+  // env: { loadFactor, tractionCut(bool), gradeAt(u) 열차 전체 평균 환산구배, tunnelAt(u) }
   function step(st, notch, dt, env) {
     // 제동 지령
     const bc = brakeCmd(notch);
@@ -75,8 +86,8 @@ RS.Physics = (function () {
     const aTrac = st.tAct * tractionMax(st.v, env.loadFactor);
     const aGrade = -G * grade / 1000;
     let a = aTrac + aGrade;
-    const resist = st.v > 0.01 ? resistance(st.v) : 0;
-    const retard = st.bAct + resist;
+    const resist = st.v > 0.01 ? resistance(st.v, env.tunnelAt ? env.tunnelAt(st.s) : false) : 0;
+    const retard = st.bAct * brakeFactor(st.v) + resist;
 
     if (st.v <= 0.0001) {
       // 정지 중: 제동력이 구배력을 이기면 정지 유지
@@ -90,5 +101,5 @@ RS.Physics = (function () {
     return st;
   }
 
-  return { P, KMH, G, notchName, brakeCmd, resistance, makeState, cloneState, step };
+  return { P, KMH, G, notchName, brakeCmd, resistance, tractionMax, brakeFactor, makeState, cloneState, step };
 })();

@@ -13,7 +13,8 @@ RS.Sim = (function () {
       const A = c.stations[c.startIdx];
       this.st = Ph.makeState(A.stop);
       this.veh = new RS.Vehicle.Vehicle(c, A.stop);
-      this.env = { loadFactor: o.load || 1.2, gradeAt: c.gradeAt };
+      this.env = { loadFactor: o.load || 1.2, gradeAt: c.effGradeAt, tunnelAt: c.tunnelAt };
+      this.loadPct = Math.round(((o.load || 1.2) - 1) / 0.6 * 100); // 승차율(%)
       this.atc = new RS.ATC.OnBoard(c, c.isATS(A.stop + 30) ? 'ATS' : 'ATC');
       this.leader = new RS.ATC.Leader(c, c.startIdx + 1, !!o.leader && !c.isATS(A.stop + 30));
       this.codes = RS.ATC.computeCodes(c, this.leader);
@@ -97,6 +98,14 @@ RS.Sim = (function () {
         if (this.dwell < 8) { this.flash('승객 승하차 중…', '#ffc04d', 1.5); return; }
         this.doors = false; this.veh.doors = false; this.events.push('doorClose');
         this.announce('close', [{ key: 'close', ko: '출입문 닫습니다.' }]);
+        // 역마다 승하차로 승차율 변화 → 하중에 따라 가속도 변화 (제동은 응하중이라 일정)
+        if (B) {
+          const busy = { '금정': 25, '인덕원': 18, '범계': 15, '정부과천청사': 12, '과천': 8, '평촌': 8, '산본': 10, '남태령': 5 }[B.name] || 0;
+          const r = Math.sin((B.idx + 1) * 12.9898 + this.c.d * 78.233) * 43758.5453;
+          const rnd = r - Math.floor(r);
+          this.loadPct = Math.max(10, Math.min(160, Math.round(this.loadPct + (rnd - 0.5) * 30 + busy * (this.c.d > 0 ? 1 : 0.7) - 6)));
+          this.env.loadFactor = 1 + this.loadPct / 100 * 0.6;
+        }
         this.pushCall('출입문 닫힘'); this.pushCall('안전문 닫힘');
         this.served = false;
         if (B && B.i === this.c.endIdx) { this.finish(); return; }
@@ -174,7 +183,7 @@ RS.Sim = (function () {
       for (const e of this.atc.events) this.events.push('atc_' + e);
       V.update(dt, this.u);
       const notch = V.notch(this.atc.braking, this.atc.eb);
-      Ph.step(this.st, notch, dt, { loadFactor: this.env.loadFactor, tractionCut: V.tractionCut() || this.atc.braking || this.atc.eb, gradeAt: c.gradeAt });
+      Ph.step(this.st, notch, dt, { loadFactor: this.env.loadFactor, tractionCut: V.tractionCut() || this.atc.braking || this.atc.eb, gradeAt: c.effGradeAt, tunnelAt: c.tunnelAt });
       if (this.doors) { this.dwell += dt; this.st.v = 0; }
 
       // 가이드 · 자동운전 (10 Hz)

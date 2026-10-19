@@ -7,7 +7,7 @@ RS.Predictor = (function () {
   const Ph = RS.Physics;
   const KMH = 3.6;
 
-  function envOf(env, cut) { return { loadFactor: env.loadFactor, tractionCut: cut, gradeAt: env.gradeAt }; }
+  function envOf(env, cut) { return { loadFactor: env.loadFactor, tractionCut: cut, gradeAt: env.gradeAt, tunnelAt: env.tunnelAt }; }
 
   // notch 를 유지했을 때 속도가 vTarget(m/s) 이하가 될 때까지
   function runUntil(st0, notch, vTarget, env, maxT) {

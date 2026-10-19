@@ -309,12 +309,25 @@ RS.makeCourse = function (dir, startIdx, endIdx) {
     return lo;
   };
 
+  // 열차 전체(200 m)에 걸친 평균 환산구배 = 구배 + 곡선저항(600/R ‰), 5 m 간격으로 미리 계산
+  const EG = 5, egN = Math.ceil((uMax - uMin) / EG) + 1;
+  const eg = new Float32Array(egN);
+  const curveRes = (u) => { for (const [a, b, R] of curves) if (u >= a && u < b) return 600 / Math.abs(R); return 0; };
+  for (let k = 0; k < egN; k++) {
+    const u = uMin + k * EG;
+    let sum = 0, n = 0;
+    for (let x = u - C.TRAIN_LEN; x <= u; x += 10) { sum += gradeAt(x) + curveRes(x); n++; }
+    eg[k] = sum / n;
+  }
+  const effGradeAt = (u) => { const k = Math.round((u - uMin) / EG); return eg[k < 0 ? 0 : k >= egN ? egN - 1 : k]; };
+  const tunnelAt = (u) => u >= tunnel[0] && u <= tunnel[1];
+
   const s0 = Math.max(0, Math.min(startIdx || 0, stations.length - 2));
   const s1 = Math.max(s0 + 1, Math.min(endIdx == null ? stations.length - 1 : endIdx, stations.length - 1));
 
   return {
     dir, d, name: dir === 'down' ? '하선 (남태령 → 산본)' : '상선 (산본 → 남태령)',
-    uMin, uMax, toS, toU, stations, curves, gradeAt, tunnel, dead, twist, isMetro, otherOffset, isATS, atBoundary, supplyAt,
+    uMin, uMax, toS, toU, stations, curves, gradeAt, effGradeAt, tunnelAt, tunnel, dead, twist, isMetro, otherOffset, isATS, atBoundary, supplyAt,
     blocks, blockIndexAt, limits, civilLimit, calls, signs, segs, startIdx: s0, endIdx: s1,
     TRAIN_LEN: C.TRAIN_LEN, LINE_MAX: C.LINE_MAX,
   };

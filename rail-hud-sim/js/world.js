@@ -79,8 +79,8 @@ RS.World = (function () {
       return v3.set(f.x + f.rx * l, f.y + h, f.z + f.rz * l);
     }
 
-    function sweep(u0, u1, step, prof, uS, vS) {
-      const pos = [], uv = [], idx = [];
+    function sweep(u0, u1, step, prof, uS, vS, light) {
+      const pos = [], uv = [], idx = [], col = [];
       let rows = 0, cols = 0;
       const tmp = new THREE.Vector3();
       for (let u = u0; u <= u1 + 1e-6; u += step) {
@@ -91,6 +91,7 @@ RS.World = (function () {
           if (j > 0) s += Math.hypot(p[j][0] - p[j - 1][0], p[j][1] - p[j - 1][1]);
           point(u, p[j][0], p[j][1], tmp);
           pos.push(tmp.x, tmp.y, tmp.z);
+          if (light) { const c = light(u, p[j][0], p[j][1]); col.push(c[0], c[1], c[2]); }
           uv.push(s * (uS || 0.25), (u - C.uMin) * (vS || 0.25));
         }
         rows++;
@@ -102,19 +103,22 @@ RS.World = (function () {
       const g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
       g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      if (light) g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
       g.setIndex(idx);
       g.computeVertexNormals();
       return g;
     }
+    // 재질이 vertexColors 이면 베이킹 조명(bake)을 정점 색으로 넣는다
     function chunks(u0, u1, step, prof, mat, chunk, uS, vS) {
       chunk = chunk || 400;
+      const light = mat.vertexColors ? bake : null;
       for (let a = u0; a < u1; a += chunk) {
         const b = Math.min(u1, a + chunk);
         if (b - a < step) continue;
-        scene.add(new THREE.Mesh(sweep(a, b, step, prof, uS, vS), mat));
+        scene.add(new THREE.Mesh(sweep(a, b, step, prof, uS, vS, light), mat));
       }
     }
-    const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpE = new THREE.Euler(), tmpP = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
+    const tmpC = new THREE.Color(), tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpE = new THREE.Euler(), tmpP = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
     function instances(geo, mat, items) {
       if (!items.length) return null;
       const im = new THREE.InstancedMesh(geo, mat, items.length);
@@ -125,6 +129,7 @@ RS.World = (function () {
         tmpQ.setFromEuler(tmpE);
         tmpM.compose(tmpP, tmpQ, one);
         im.setMatrixAt(i, tmpM);
+        if (mat.userData.bake) { const c = bake(it.u, it.l, it.h); tmpC.setRGB(c[0], c[1], c[2]); im.setColorAt(i, tmpC); }
       });
       scene.add(im);
       return im;
@@ -164,13 +169,15 @@ RS.World = (function () {
 
     // ───── 재질 ─────
     const ph = (o) => new THREE.MeshPhongMaterial(Object.assign({ side: THREE.DoubleSide, shininess: 8 }, o));
+    const baked = (m) => { const n = m.clone(); n.vertexColors = true; return n; };
+    const bakedInst = (m) => { const n = m.clone(); n.userData.bake = true; return n; };
     const M = {
       tunnel: ph({ map: assetTex('concrete_wall_008_diff', () => noiseTexture('#77746e', 30, 128, 128)), normalMap: assetTex('concrete_wall_008_nor'), color: 0x8e8b84 }),
       slab: ph({ map: assetTex('gravel_concrete_diff', () => noiseTexture('#8d8a84', 22, 64, 64)), normalMap: assetTex('gravel_concrete_nor'), color: 0xa8a49c }),
       ballast: ph({ map: assetTex('gravel_stones_diff', () => noiseTexture('#7a746c', 90, 128, 128)), normalMap: assetTex('gravel_stones_nor'), color: 0xb0a89c }),
       ground: ph({ map: assetTex('leafy_grass_diff', () => noiseTexture('#5d6b47', 40, 128, 128)), normalMap: assetTex('leafy_grass_nor'), color: 0x8fb06a }),
-      platform: ph({ map: assetTex('large_grey_tiles_diff', () => noiseTexture('#b8b4aa', 18, 128, 128)), normalMap: assetTex('large_grey_tiles_nor'), shininess: 30 }),
-      wallTile: ph({ map: assetTex('long_white_tiles_diff', () => noiseTexture('#e8e6e0', 10, 128, 128)), normalMap: assetTex('long_white_tiles_nor'), shininess: 40 }),
+      platform: ph({ map: assetTex('large_grey_tiles_diff', () => noiseTexture('#b8b4aa', 18, 128, 128)), normalMap: assetTex('large_grey_tiles_nor'), shininess: 30, color: 0xa8a6a2 }),
+      wallTile: ph({ map: assetTex('long_white_tiles_diff', () => noiseTexture('#e8e6e0', 10, 128, 128)), normalMap: assetTex('long_white_tiles_nor'), shininess: 40, color: 0xcfcfcc }),
       concrete: ph({ map: assetTex('concrete_wall_008_diff', () => noiseTexture('#8a8780', 20, 64, 64)), color: 0xc8c4bc }),
       rail: new THREE.MeshPhongMaterial({ color: 0x6f7378, shininess: 60, specular: 0x555555 }),
       railTop: new THREE.MeshBasicMaterial({ color: 0xc9cdd2 }),
@@ -190,6 +197,45 @@ RS.World = (function () {
 
     const [T0, T1] = C.tunnel;
     const inT = (u) => u >= T0 && u <= T1;
+
+    // ───── 조명 베이킹 ─────
+    // 터널 등(12 m 간격, 좌우 엇갈림)의 빛이 벽·바닥·레일에 떨어지는 밝기를 정점 색으로 미리 계산
+    const lampsL = [], lampsR = [];
+    for (let u = T0; u < T1; u += 12) {
+      if (stationWidenRaw(u) > 0.05) continue;
+      lampsL.push(u); lampsR.push(u + 6);
+    }
+    function stationWidenRaw(u) {
+      let w = 0;
+      for (const st of C.stations) { const a = st.pStart - 15, b = st.pEnd + 15; w = Math.max(w, smooth(a - 25, a, u) * (1 - smooth(b, b + 25, u))); }
+      return w;
+    }
+    function lampSum(list, u, lw, l, h) {
+      let s = 0;
+      let lo = 0, hi = list.length - 1;
+      while (lo < hi) { const m = (lo + hi) >> 1; if (list[m] < u - 30) lo = m + 1; else hi = m; }
+      for (let k = lo; k < list.length && list[k] < u + 30; k++) {
+        const du = list[k] - u, dl = lw - l, dh = 3.5 - h;
+        s += 1 / (1 + (du * du + dl * dl + dh * dh) / 7);
+      }
+      return s;
+    }
+    function bake(u, l, h) {
+      if (!inT(u)) return [1, 1, 1];
+      const w = stationWidenRaw(u);
+      const o = otherSmoothRef(u);
+      const L = Math.min(0, o) - 3.0, R = Math.max(0, o) + 3.0;
+      const lamp = 0.9 * (lampSum(lampsL, u, L, l, h) + lampSum(lampsR, u, R, l, h));
+      const day = Math.max(0, 1 - Math.min(u - T0, T1 - u) / 70) * (C.uMin < T0 || C.uMax > T1 ? 1 : 0);
+      const base = 0.07;
+      const r = base + lamp * 1.0 + w * 1.05 + day * 0.9;
+      const g = base + lamp * 0.92 + w * 1.08 + day * 0.95;
+      const bl = base * 1.1 + lamp * 0.78 + w * 1.12 + day * 1.0;
+      return [r, g, bl];
+    }
+    const otherSmoothRef = (u) => otherSmooth(u);
+    for (const k of ['tunnel', 'slab', 'concrete', 'rail', 'wire', 'dark', 'platform', 'wallTile', 'psdFrame']) M[k + 'B'] = baked(M[k]);
+    M.sleeperB = bakedInst(M.sleeper); M.wireI = bakedInst(M.wire); M.poleB = bakedInst(M.pole);
     const tunnelRanges = [[Math.max(C.uMin, T0), Math.min(C.uMax, T1)]];
     const openRanges = [];
     if (T0 > C.uMin) openRanges.push([C.uMin, T0]);
@@ -197,13 +243,13 @@ RS.World = (function () {
 
     // ───── 도상 ─────
     const bed = (o, open) => (u) => { const oo = typeof o === 'function' ? o(u) : o; return open ? [[oo - 3.3, -0.95], [oo - 1.7, -0.25], [oo + 1.7, -0.25], [oo + 3.3, -0.95]] : [[oo - 2.0, -0.35], [oo - 1.3, -0.25], [oo + 1.3, -0.25], [oo + 2.0, -0.35]]; };
-    for (const [a, b] of tunnelRanges) chunks(a, b, 4, bed(0, false), M.slab, 400, 0.45, 0.45);
+    for (const [a, b] of tunnelRanges) chunks(a, b, 4, bed(0, false), M.slabB, 400, 0.45, 0.45);
     for (const [a, b] of openRanges) chunks(a, b, 4, bed(0, true), M.ballast, 400, 0.5, 0.5);
 
     // ───── 레일 ─────
     const railProf = (l) => (u) => { const o = typeof l === 'function' ? l(u) : l; return [[o - 0.036, -0.17], [o - 0.036, -0.02], [o - 0.03, 0], [o + 0.03, 0], [o + 0.036, -0.02], [o + 0.036, -0.17]]; };
     for (const l of [-0.7175, 0.7175]) {
-      chunks(C.uMin, C.uMax, 4, railProf(l), M.rail, 500);
+      chunks(C.uMin, C.uMax, 4, railProf(l), M.railB, 500);
       chunks(C.uMin, C.uMax, 4, () => [[l - 0.028, 0.003], [l + 0.028, 0.003]], M.railTop, 500);
     }
     const otherSegs = [[C.uMin, T.start - 1], [T.end + 1, C.uMax]];
@@ -211,9 +257,9 @@ RS.World = (function () {
       for (const [x, y] of tunnelRanges.concat(openRanges)) {
         const p = Math.max(a, x), q = Math.min(b, y);
         if (q - p < 8) continue;
-        chunks(p, q, 4, bed(otherOff, !inT((p + q) / 2)), inT((p + q) / 2) ? M.slab : M.ballast, 400, 0.45, 0.45);
+        chunks(p, q, 4, bed(otherOff, !inT((p + q) / 2)), inT((p + q) / 2) ? M.slabB : M.ballast, 400, 0.45, 0.45);
       }
-      for (const l of [-0.7175, 0.7175]) chunks(a, b, 4, railProf((u) => otherOff(u) + l), M.rail, 500);
+      for (const l of [-0.7175, 0.7175]) chunks(a, b, 4, railProf((u) => otherOff(u) + l), M.railB, 500);
     }
     {
       const list = [];
@@ -222,7 +268,7 @@ RS.World = (function () {
         const o = C.otherOffset(u);
         if (o !== null && Math.round(u / 0.9) % 2 === 0) list.push({ u, l: o, h: -0.2 });
       }
-      instances(new THREE.BoxGeometry(2.4, 0.14, 0.24), M.sleeper, list);
+      instances(new THREE.BoxGeometry(2.4, 0.14, 0.24), M.sleeperB, list);
     }
 
     // ───── 터널 ─────
@@ -234,10 +280,29 @@ RS.World = (function () {
       return [[L, -0.4], [L, 4.2 + 0.9 * w], [L + 1.2, top - 0.4], [mid, top], [R - 1.2, top - 0.4], [R, 4.2 + 0.9 * w], [R, -0.4]];
     };
     for (const [a, b] of tunnelRanges) {
-      chunks(a, b, 2, tunnelProfile, M.tunnel, 300, 0.22, 0.22);
-      chunks(a, b, 4, (u) => { const p = tunnelProfile(u); return [[p[0][0], -0.38], [p[6][0], -0.38]]; }, M.concrete, 400, 0.25, 0.25);
-      chunks(a, b, 4, (u) => { const p = tunnelProfile(u); return [[p[0][0] + 0.03, 0.6], [p[0][0] + 0.03, 0.85]]; }, M.dark, 500);
-      chunks(a, b, 4, (u) => { const p = tunnelProfile(u); return [[p[6][0] - 0.03, 0.6], [p[6][0] - 0.03, 0.85]]; }, M.dark, 500);
+      chunks(a, b, 2, tunnelProfile, M.tunnelB, 300, 0.22, 0.22);
+      chunks(a, b, 2, (u) => { const p = tunnelProfile(u); return [[p[0][0], -0.38], [p[6][0], -0.38]]; }, M.concreteB, 400, 0.25, 0.25);
+      // 터널 설비: 대피통로(상대선 반대쪽 벽), 케이블 트레이, 소화 배관 — 역 구간에서는 접힘
+      const outer = (u) => { const o = C.otherOffset(u); return o !== null && o > 0 ? -1 : 1; }; // 대피통로 쪽
+      const wallX = (u, s) => { const p = tunnelProfile(u); return s < 0 ? p[0][0] : p[6][0]; };
+      const fold = (u) => 1 - stationWidenRaw(u);
+      chunks(a, b, 4, (u) => { const s = outer(u), W = wallX(u, s), k = fold(u) * 0.85; return [[W - s * 0.02, 0.62 * fold(u) - 0.38 * (1 - fold(u))], [W - s * k, 0.62 * fold(u) - 0.38 * (1 - fold(u))], [W - s * k, -0.38]]; }, M.concreteB, 400, 0.4, 0.4);
+      chunks(a, b, 4, (u) => { const s = outer(u), W = wallX(u, s), k = fold(u) * 0.85; return [[W - s * k, 0.66 * fold(u)], [W - s * k, 1.6 * fold(u)]]; }, M.darkB, 500);
+      for (const hh of [1.55, 2.05]) {
+        chunks(a, b, 4, (u) => { const s = -outer(u), W = wallX(u, s), k = fold(u); return [[W - s * 0.02, hh * k + 0.9 * (1 - k)], [W - s * 0.38 * k, hh * k + 0.9 * (1 - k)], [W - s * 0.38 * k, (hh + 0.12) * k + 0.9 * (1 - k)]]; }, M.darkB, 500);
+      }
+      const pipeMat = baked(ph({ color: 0x7a4a44, shininess: 30 }));
+      chunks(a, b, 4, (u) => { const s = -outer(u), W = wallX(u, s), k = fold(u), cx = W - s * 0.22 * k, cy = 2.75; const r = 0.07 * k + 0.001; const pts = []; for (let q = 0; q <= 8; q++) { const an = q / 8 * Math.PI * 2; pts.push([cx + Math.cos(an) * r, cy + Math.sin(an) * r]); } return pts; }, pipeMat, 500);
+      // 비상구 유도등 (녹색, 50 m 간격)
+      const exitTex = textTexture((g, w, h) => {
+        g.fillStyle = '#0a9a4a'; g.fillRect(0, 0, w, h);
+        g.fillStyle = '#eafff0'; g.font = `900 ${h * 0.55}px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillText('비상구 →', w / 2, h / 2 + 2);
+      }, 256, 96);
+      const exitMat = new THREE.MeshBasicMaterial({ map: exitTex, side: THREE.DoubleSide });
+      const exits = [];
+      for (let u = a + 25; u < b; u += 50) { if (stationWidenRaw(u) > 0.01) continue; const s = outer(u); exits.push({ u, l: wallX(u, s) - s * 0.03, h: 1.15, ry: s > 0 ? -Math.PI / 2 : Math.PI / 2 }); }
+      instances(new THREE.PlaneGeometry(0.55, 0.2), exitMat, exits);
       const lamps = [], br = [];
       for (let u = a; u < b; u += 12) {
         if (stationWiden(u) > 0.05) continue;
@@ -246,7 +311,15 @@ RS.World = (function () {
       }
       for (let u = a; u < b; u += 8) br.push({ u, l: 0, h: 5.35 });
       instances(new THREE.BoxGeometry(0.07, 0.1, 1.0), M.lamp, lamps);
-      instances(new THREE.BoxGeometry(1.0, 0.16, 0.12), M.wire, br);
+      instances(new THREE.BoxGeometry(1.0, 0.16, 0.12), M.wireI, br);
+      // 램프 글로우 (가산 혼합)
+      const glowTex = textTexture((g, w, h) => {
+        const gr = g.createRadialGradient(w / 2, h / 2, 2, w / 2, h / 2, w / 2);
+        gr.addColorStop(0, 'rgba(255,240,205,0.95)'); gr.addColorStop(0.25, 'rgba(255,225,170,0.35)'); gr.addColorStop(1, 'rgba(255,210,150,0)');
+        g.fillStyle = gr; g.fillRect(0, 0, w, h);
+      }, 128, 128);
+      const glowMat = new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: true });
+      instances(new THREE.PlaneGeometry(2.4, 1.0), glowMat, lamps.map(it => ({ u: it.u, l: it.l + (it.l < 0 ? 0.08 : -0.08), h: it.h, ry: Math.PI / 2 })));
       for (const edge of [a, b]) {
         if (edge <= C.uMin + 1 || edge >= C.uMax - 1) continue;
         const p = tunnelProfile(edge), L = p[0][0], R = p[6][0];
@@ -254,6 +327,100 @@ RS.World = (function () {
         plane(edge, L - 15, 6, 30, 16, M.concrete, ry);
         plane(edge, R + 15, 6, 30, 16, M.concrete, ry);
         plane(edge, (L + R) / 2, 11, R - L, 10, M.concrete, ry);
+      }
+    }
+
+    // ───── 지상 경관: 아파트 단지 · 방음벽 · 가로수 · 도로 · 고가도로 ─────
+    let seed = 1234567;
+    const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+    const winTex = textTexture((g, w, h) => {
+      g.fillStyle = '#e9e6df'; g.fillRect(0, 0, w, h);
+      const fw = w / 4, fh = h / 8;
+      for (let i = 0; i < 4; i++) for (let j = 0; j < 8; j++) {
+        const x = i * fw, y = j * fh;
+        g.fillStyle = '#d5d1c8'; g.fillRect(x, y + fh * 0.78, fw, fh * 0.1);           // 층 슬래브
+        const lit = Math.random() < 0.18;
+        g.fillStyle = lit ? '#f3e2a6' : (Math.random() < 0.5 ? '#5f7486' : '#4c5f70');
+        g.fillRect(x + fw * 0.12, y + fh * 0.18, fw * 0.76, fh * 0.52);                 // 발코니 창
+        g.fillStyle = 'rgba(255,255,255,0.25)'; g.fillRect(x + fw * 0.5, y + fh * 0.18, 2, fh * 0.52);
+      }
+    }, 256, 512);
+    winTex.wrapS = winTex.wrapT = THREE.RepeatWrapping;
+    const bMats = [0xffffff, 0xf2e8d5, 0xdfe6ea, 0xece3df].map(c => new THREE.MeshLambertMaterial({ map: winTex, color: c }));
+    const roofMat = new THREE.MeshLambertMaterial({ color: 0x8c8f93 });
+    function buildingGeo(w, h, d) {
+      const g = new THREE.BoxGeometry(w, h, d);
+      const uv = g.attributes.uv;
+      // 면 순서 +x, -x, +y, -y, +z, -z (각 4정점): 창 1칸 = 폭 3 m × 높이 2.9 m 가 되도록 UV 배율
+      const sc = [[d / 12, h / 23.2], [d / 12, h / 23.2], [0, 0], [0, 0], [w / 12, h / 23.2], [w / 12, h / 23.2]];
+      for (let f = 0; f < 6; f++) for (let v = 0; v < 4; v++) { const i = f * 4 + v; uv.setXY(i, uv.getX(i) * sc[f][0], uv.getY(i) * sc[f][1]); }
+      g.clearGroups(); g.addGroup(0, 12, 0); g.addGroup(12, 6, 1); g.addGroup(18, 18, 0);
+      return g;
+    }
+    const treeTex = textTexture((g, w, h) => {
+      g.clearRect(0, 0, w, h);
+      g.fillStyle = '#5b4632'; g.fillRect(w / 2 - 6, h * 0.62, 12, h * 0.38);
+      for (let i = 0; i < 60; i++) {
+        const a = Math.random() * Math.PI * 2, r = Math.random() * w * 0.36;
+        g.fillStyle = ['#2f5d2b', '#3b6e34', '#4b7f3c', '#28502a'][i % 4];
+        g.beginPath(); g.arc(w / 2 + Math.cos(a) * r, h * 0.38 + Math.sin(a) * r * 0.9, 18 + Math.random() * 14, 0, 7); g.fill();
+      }
+    }, 128, 256);
+    const treeMat = new THREE.MeshLambertMaterial({ map: treeTex, alphaTest: 0.5, side: THREE.DoubleSide });
+    const barrierTex = textTexture((g, w, h) => {
+      g.clearRect(0, 0, w, h);
+      g.fillStyle = 'rgba(150,190,170,0.35)'; g.fillRect(0, 0, w, h);
+      g.fillStyle = 'rgba(90,100,105,1)'; g.fillRect(0, 0, w, 14); g.fillRect(0, h - 14, w, 14); g.fillRect(0, 0, 10, h);
+      g.fillRect(w * 0.5, 0, 6, h);
+    }, 128, 256);
+    barrierTex.wrapS = barrierTex.wrapT = THREE.RepeatWrapping;
+    const barrierMat = new THREE.MeshLambertMaterial({ map: barrierTex, transparent: true, side: THREE.DoubleSide, depthWrite: false });
+    const asphalt = new THREE.MeshLambertMaterial({ color: 0x4a4c50 });
+    const stNear = (u, pad) => C.stations.some(s => u > s.pStart - pad && u < s.pEnd + pad);
+    for (const [a, b] of openRanges) {
+      const o = (u) => otherOff(u);
+      // 아파트·상가
+      for (const side of [-1, 1]) {
+        for (let u = a + 40; u < b - 20; u += 38 + rnd() * 30) {
+          const dist = 45 + rnd() * 110, w = 22 + rnd() * 18, d = 12 + rnd() * 5;
+          const floors = rnd() < 0.25 ? 4 + Math.floor(rnd() * 4) : 12 + Math.floor(rnd() * 14);
+          const h = floors * 2.9;
+          const geo = buildingGeo(w, h, d);
+          const m = new THREE.Mesh(geo, [bMats[Math.floor(rnd() * bMats.length)], roofMat]);
+          const f = frame(u, {});
+          m.position.copy(point(u, side * dist + (side > 0 ? Math.max(0, o(u)) : Math.min(0, o(u))), h / 2 - 2.0));
+          m.rotation.y = -f.th + (rnd() < 0.5 ? 0 : Math.PI / 2) + (rnd() - 0.5) * 0.3;
+          scene.add(m);
+        }
+      }
+      // 도로 (선로 양옆 25~32 m)
+      for (const side of [-1, 1]) chunks(a, b, 8, () => [[side * 26 - 4, -1.9], [side * 26 + 4, -1.9]], asphalt, 400);
+      // 방음벽 (역 주변 제외)
+      const bl = (u) => (o(u) < 0 ? o(u) - 3.4 : -3.6), br = (u) => (o(u) > 0 ? o(u) + 3.4 : 3.6);
+      for (let u = a + 30; u < b - 30; u += 300) {
+        const e = Math.min(b - 30, u + 220);
+        if (stNear(u, 80) || stNear(e, 80)) continue;
+        chunks(u, e, 4, (x) => [[bl(x), -0.8], [bl(x), 3.2]], barrierMat, 300, 0.5, 0.25);
+        chunks(u, e, 4, (x) => [[br(x), -0.8], [br(x), 3.2]], barrierMat, 300, 0.5, 0.25);
+      }
+      // 가로수
+      const trees = [];
+      for (let u = a + 10; u < b; u += 9 + rnd() * 10) {
+        for (const side of [-1, 1]) if (rnd() < 0.7) trees.push({ u: u + rnd() * 5, l: side * (12 + rnd() * 9) + (side > 0 ? Math.max(0, o(u)) : Math.min(0, o(u))), h: 2.5 + rnd() * 0.5, ry: rnd() * 3 });
+      }
+      const tg = new THREE.PlaneGeometry(4.5, 7);
+      instances(tg, treeMat, trees);
+      instances(tg, treeMat, trees.map(x => ({ ...x, ry: x.ry + Math.PI / 2 })));
+      // 고가도로 (선로를 가로지름)
+      for (let k = 0; k < 2; k++) {
+        const u = a + (b - a) * (0.3 + 0.35 * k);
+        if (stNear(u, 120)) continue;
+        const deck = new THREE.Mesh(new THREE.BoxGeometry(70, 1.2, 14), new THREE.MeshLambertMaterial({ map: assetTex('concrete_wall_008_diff', () => noiseTexture('#8a8780', 20, 64, 64)), color: 0xbdbab2 }));
+        const f = frame(u, {});
+        deck.position.copy(point(u, 0, 8.2)); deck.rotation.y = -f.th + Math.PI / 2; scene.add(deck);
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(70, 1.0, 0.25), M.pole);
+        for (const dz of [-6.9, 6.9]) { const r2 = rail.clone(); r2.position.copy(point(u + dz, 0, 9.3)); r2.rotation.y = -f.th + Math.PI / 2; scene.add(r2); }
+        for (const l of [-9, 9, -25, 25]) instances(new THREE.BoxGeometry(1.6, 10, 1.6), M.pole, [{ u, l: l + (l > 0 ? Math.max(0, o(u)) : Math.min(0, o(u))), h: 3.2 }]);
       }
     }
 
@@ -289,6 +456,48 @@ RS.World = (function () {
 
     // ───── 역사 ─────
     const monitors = [], routeInd = [];
+    // 스크린도어 5 m 모듈 (가운데 미닫이문 2 m + 고정 유리), 텍스처 가로 = 높이 방향, 세로 = 선로 방향
+    const psdTex = textTexture((g, w, h) => {
+      g.clearRect(0, 0, w, h);
+      g.fillStyle = 'rgba(170,205,220,0.20)'; g.fillRect(0, 0, w, h);
+      g.fillStyle = 'rgba(200,205,210,0.95)';
+      g.fillRect(0, 0, w, 10); g.fillRect(0, h - 10, w, 10);               // 모듈 경계 프레임
+      g.fillRect(0, h * 0.3 - 6, w, 12); g.fillRect(0, h * 0.7 - 6, w, 12); // 문 프레임
+      g.fillRect(0, h * 0.5 - 2, w, 4);                                     // 문 맞닿는 선
+      g.fillRect(0, 0, 14, h); g.fillRect(w - 18, 0, 18, h);                // 하단·상단 레일
+      g.fillStyle = 'rgba(255,210,0,0.9)'; g.fillRect(w * 0.5, h * 0.36, 20, h * 0.28); // 기대지 마세요 띠
+      g.fillStyle = 'rgba(30,60,140,0.9)'; g.fillRect(w * 0.62, h * 0.33, 26, h * 0.08); g.fillRect(w * 0.62, h * 0.59, 26, h * 0.08);
+    }, 256, 512);
+    psdTex.wrapS = psdTex.wrapT = THREE.RepeatWrapping;
+    const psdMat = new THREE.MeshPhongMaterial({ map: psdTex, transparent: true, side: THREE.DoubleSide, depthWrite: false, shininess: 90 });
+    const ceilTex = textTexture((g, w, h) => {
+      g.fillStyle = '#c9ccd0'; g.fillRect(0, 0, w, h);
+      g.strokeStyle = '#9da2a8'; g.lineWidth = 3;
+      for (let x = 0; x <= w; x += w / 4) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke(); }
+      for (let y = 0; y <= h; y += h / 8) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); }
+      g.fillStyle = 'rgba(0,0,0,0.25)'; for (let i = 0; i < 40; i++) g.fillRect(Math.random() * w, Math.random() * h, 3, 3);
+    }, 256, 256);
+    ceilTex.wrapS = ceilTex.wrapT = THREE.RepeatWrapping;
+    const ceilMat = ph({ map: ceilTex, shininess: 40 });
+    const posterDraw = [
+      (g, w, h) => { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#2e7d4f'); gr.addColorStop(1, '#a8d08d'); g.fillStyle = gr; g.fillRect(0, 0, w, h); g.fillStyle = '#fff'; g.font = `900 46px ${FONT}`; g.textAlign = 'center'; g.fillText('과천 나들이', w / 2, 80); g.font = `500 24px ${FONT}`; g.fillText('숲 · 공원 · 과학관', w / 2, 120); g.fillStyle = '#1f5a36'; for (let i = 0; i < 7; i++) { g.beginPath(); g.arc(30 + i * 35, h - 60 - (i % 3) * 25, 40, 0, 7); g.fill(); } },
+      (g, w, h) => { g.fillStyle = '#ffd400'; g.fillRect(0, 0, w, h); g.fillStyle = '#111'; g.font = `900 40px ${FONT}`; g.textAlign = 'center'; g.fillText('안전문에', w / 2, 90); g.fillText('기대지 마세요', w / 2, 140); g.beginPath(); g.arc(w / 2, 240, 55, 0, 7); g.lineWidth = 12; g.strokeStyle = '#d0021b'; g.stroke(); g.beginPath(); g.moveTo(w / 2 - 38, 278); g.lineTo(w / 2 + 38, 202); g.stroke(); },
+      (g, w, h) => { g.fillStyle = '#f4f6f8'; g.fillRect(0, 0, w, h); g.fillStyle = '#00a5de'; g.fillRect(0, 0, w, 60); g.fillStyle = '#fff'; g.font = `800 30px ${FONT}`; g.textAlign = 'center'; g.fillText('4호선 노선도', w / 2, 42); g.strokeStyle = '#00a5de'; g.lineWidth = 8; g.beginPath(); g.moveTo(40, 90); g.lineTo(40, h - 30); g.stroke(); const n = ['남태령', '선바위', '경마공원', '대공원', '과천', '정부과천청사', '인덕원', '평촌', '범계', '금정', '산본']; n.forEach((s, i) => { const y = 95 + i * ((h - 130) / 10); g.fillStyle = '#fff'; g.beginPath(); g.arc(40, y, 9, 0, 7); g.fill(); g.lineWidth = 4; g.stroke(); g.fillStyle = '#222'; g.font = `600 20px ${FONT}`; g.textAlign = 'left'; g.fillText(s, 62, y + 7); }); },
+      (g, w, h) => { const gr = g.createLinearGradient(0, 0, w, h); gr.addColorStop(0, '#1d3557'); gr.addColorStop(1, '#457b9d'); g.fillStyle = gr; g.fillRect(0, 0, w, h); g.fillStyle = '#f1faee'; g.font = `900 38px ${FONT}`; g.textAlign = 'center'; g.fillText('철도 안전', w / 2, 90); g.font = `500 22px ${FONT}`; g.fillText('선로에 물건이 떨어지면', w / 2, 150); g.fillText('역 직원에게 알려 주세요', w / 2, 182); g.fillStyle = '#e63946'; g.fillRect(w / 2 - 60, 230, 120, 120); g.fillStyle = '#fff'; g.font = `900 60px ${FONT}`; g.fillText('!', w / 2, 315); },
+    ].map(fn => new THREE.MeshPhongMaterial({ map: textTexture(fn, 256, 384), shininess: 60 }));
+    const exitMat = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, map: textTexture((g, w, h) => {
+      g.fillStyle = '#ffcc00'; g.fillRect(0, 0, w, h);
+      g.fillStyle = '#111'; g.font = `900 ${h * 0.42}px ${FONT}`; g.textBaseline = 'middle'; g.textAlign = 'left';
+      g.fillText('나가는 곳  Exit', 20, h / 2); g.textAlign = 'right'; g.fillText('1 · 2 · 3 →', w - 20, h / 2);
+    }, 768, 96) });
+    const ledMat = (txt) => new THREE.MeshBasicMaterial({ map: textTexture((g, w, h) => {
+      g.fillStyle = '#060606'; g.fillRect(0, 0, w, h);
+      g.fillStyle = '#ff9f1a'; g.font = `700 ${h * 0.38}px ${FONT}`; g.textBaseline = 'middle';
+      g.textAlign = 'left'; g.fillText(txt[0], 16, h * 0.3); g.fillText(txt[1], 16, h * 0.74);
+      g.fillStyle = 'rgba(0,0,0,0.35)'; for (let x = 0; x < w; x += 4) g.fillRect(x, 0, 1, h); for (let y = 0; y < h; y += 4) g.fillRect(0, y, w, 1);
+    }, 512, 96) });
+    const dirText = C.d > 0 ? '오이도·산본 방면' : '당고개·남태령 방면';
+    const benchMat = ph({ color: 0x7d8a94, shininess: 50 });
     for (const st of C.stations) {
       const sd = st.side === 'R' ? 1 : -1;
       const a = st.pStart, b = st.pEnd;
@@ -312,10 +521,10 @@ RS.World = (function () {
       const posts = [];
       for (let u = a + 2; u < b; u += 3.5) posts.push({ u, l: P(edge + 0.25), h: hp + 1.1 });
       instances(new THREE.BoxGeometry(0.12, 2.2, 0.16), M.psdFrame, posts);
-      chunks(a + 2, b - 2, 5, () => [[P(edge + 0.25), hp + 0.1], [P(edge + 0.25), hp + 2.1]], M.psdGlass, 300);
+      chunks(a + 2, b - 2, 5, () => [[P(edge + 0.25), hp + 0.1], [P(edge + 0.25), hp + 2.1]], psdMat, 300, 0.5, 0.2);
       chunks(a + 2, b - 2, 5, () => [[P(edge + 0.25), hp + 2.15], [P(edge + 0.25), hp + 2.5]], M.psdFrame, 300);
       const lights = [];
-      for (let u = a - 10; u < b + 10; u += 4) { lights.push({ u, l: P(edge + 2.2), h: open ? hp + 3.5 : 6.7 }); if (!open) lights.push({ u, l: 0, h: 7.0 }); }
+      for (let u = a - 10; u < b + 10; u += 4) { lights.push({ u, l: P(edge + 1.2), h: hp + 3.52 }); lights.push({ u, l: P(edge + 3.4), h: hp + 3.52 }); if (!open) lights.push({ u, l: 0, h: 7.0 }); }
       instances(new THREE.BoxGeometry(0.25, 0.08, 3.0), M.lampCool, lights);
       const tex = textTexture((g, w, h) => {
         g.fillStyle = '#f6f6f3'; g.fillRect(0, 0, w, h);
@@ -337,6 +546,26 @@ RS.World = (function () {
         g.fillText('10', w / 2, h / 2 + 8);
       }, 256, 256);
       plane(st.stop, P(edge + 0.8), hp + 2.9, 0.7, 0.7, new THREE.MeshBasicMaterial({ map: stopTex }), 0);
+
+      // 천장(지하역), 광고·안내 포스터, 출구 안내판, LED 행선 안내기, 벤치
+      if (!open) chunks(a - 10, b + 10, 5, () => [[P(edge - 0.1), hp + 3.6], [P(edge + depth + 0.16), hp + 3.6]], ceilMat, 300, 0.25, 0.25);
+      let k = 0;
+      for (let u = a + 8; u < b - 4; u += 22.5, k++) {
+        if (((u - a - 20) % 45 + 45) % 45 < 6) continue; // 역명판 자리 피함
+        if (!open) plane(u, P(edge + depth + 0.12), hp + 1.0, 1.1, 1.6, posterDraw[(k + st.idx) % posterDraw.length], sd > 0 ? -Math.PI / 2 : Math.PI / 2);
+      }
+      for (const u of [st.u - 30, st.u + 70]) {
+        const m = plane(u, P(edge + 2.2), hp + 3.05, 3.6, 0.45, exitMat, 0);
+        instances(new THREE.BoxGeometry(0.03, 0.5, 0.03), M.pole, [{ u, l: P(edge + 2.2) - 1.5, h: hp + 3.35 }, { u, l: P(edge + 2.2) + 1.5, h: hp + 3.35 }]);
+      }
+      for (const u of [st.u - 75, st.u + 5]) {
+        const next = C.stations[st.i + 1];
+        plane(u, P(edge + 1.6), hp + 2.95, 2.4, 0.45, ledMat([`4  ${dirText}`, next ? `이번 열차  ${C.stations[C.endIdx].name} 행` : '이 열차는 종착역입니다']), 0);
+      }
+      const benches = [];
+      for (let u = a + 12; u < b - 10; u += 15) benches.push({ u, l: P(edge + depth - 0.55), h: hp + 0.45 });
+      instances(new THREE.BoxGeometry(0.5, 0.1, 1.8), benchMat, benches);
+      instances(new THREE.BoxGeometry(0.08, 0.45, 1.8), benchMat, benches.map(x => ({ ...x, l: x.l + P(0.25), h: hp + 0.7 })));
 
       // 승무원용 모니터 (CCTV + 승강장 안전문 정위치 표시: 미달/양호/초과, ±mm)
       {
@@ -507,39 +736,64 @@ RS.World = (function () {
       scene.add(sky);
     }
 
-    // ───── 선행열차 ─────
-    const leader = (function () {
+    // ───── 열차 메시 (선행열차 · 반대편 교행열차) ─────
+    const bodyTex = textTexture((g, w, h) => {
+      const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#e6e9ec'); gr.addColorStop(1, '#b9bec4');
+      g.fillStyle = gr; g.fillRect(0, 0, w, h);
+      g.fillStyle = '#1b6fc2'; g.fillRect(0, h * 0.62, w, h * 0.07);
+      g.fillStyle = '#1f2a33';
+      for (let x = 20; x < w - 40; x += 64) g.fillRect(x, h * 0.25, 44, h * 0.28);
+      g.fillStyle = '#6d747b'; for (let x = 0; x < w; x += 128) g.fillRect(x + 100, h * 0.2, 18, h * 0.62);
+    }, 512, 128);
+    const faceTex = textTexture((g, w, h) => {
+      g.fillStyle = '#d7dbe0'; g.fillRect(0, 0, w, h);
+      g.fillStyle = '#16202a'; g.fillRect(w * 0.08, h * 0.12, w * 0.84, h * 0.38);   // 전면 유리
+      g.fillStyle = '#1b6fc2'; g.fillRect(0, h * 0.62, w, h * 0.06);
+      g.fillStyle = '#ff9f1a'; g.font = `700 ${h * 0.09}px ${FONT}`; g.textAlign = 'center'; g.fillText('4  산본', w / 2, h * 0.09);
+      g.fillStyle = '#2a2e33'; g.fillRect(w * 0.42, h * 0.55, w * 0.16, h * 0.4);    // 관통문
+    }, 256, 256);
+    function makeTrain(headlights) {
       const group = [];
-      const bodyTex = textTexture((g, w, h) => {
-        const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#e6e9ec'); gr.addColorStop(1, '#b9bec4');
-        g.fillStyle = gr; g.fillRect(0, 0, w, h);
-        g.fillStyle = '#1b6fc2'; g.fillRect(0, h * 0.62, w, h * 0.07);
-        g.fillStyle = '#1f2a33';
-        for (let x = 20; x < w - 40; x += 64) g.fillRect(x, h * 0.25, 44, h * 0.28);
-        g.fillStyle = '#6d747b'; for (let x = 0; x < w; x += 128) g.fillRect(x + 100, h * 0.2, 18, h * 0.62);
-      }, 512, 128);
       const body = new THREE.MeshPhongMaterial({ map: bodyTex, shininess: 50 });
       const plain = new THREE.MeshPhongMaterial({ color: 0xc9ced3, shininess: 50 });
+      const face = new THREE.MeshPhongMaterial({ map: faceTex, shininess: 60 });
       const tail = new THREE.MeshBasicMaterial({ color: 0xff2a1a });
+      const head = new THREE.MeshBasicMaterial({ color: 0xfffbe8 });
+      const roofM = new THREE.MeshPhongMaterial({ color: 0x8d9298 });
       for (let i = 0; i < 10; i++) {
         const g = new THREE.Group();
-        const b = new THREE.Mesh(new THREE.BoxGeometry(3.1, 3.4, 19.5), [plain, plain, plain, plain, plain, plain]);
-        b.material = [body, body, plain, plain, plain, plain]; // ±x(긴 측면)에 창문 텍스처
+        const endF = i === 0 ? face : plain, endR = i === 9 ? face : plain;
+        const b = new THREE.Mesh(new THREE.BoxGeometry(3.1, 3.4, 19.5), [body, body, roofM, plain, endR, endF]);
         b.position.y = 2.65; g.add(b);
-        if (i === 9) for (const x of [-1.1, 1.1]) { const t = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.25, 0.05), tail); t.position.set(x, 1.6, 9.78); g.add(t); }
+        if (i === 0 && headlights) for (const x of [-1.05, 1.05]) { const t2 = new THREE.Mesh(new THREE.CircleGeometry(0.16, 12), head); t2.position.set(x, 1.55, -9.77); t2.rotation.y = Math.PI; g.add(t2); }
+        if (i === 9) for (const x of [-1.1, 1.1]) { const t2 = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.25, 0.05), tail); t2.position.set(x, 1.6, 9.78); g.add(t2); }
+        if (i % 2 === 1) { const pan = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.08, 0.6), M.pole); pan.position.set(0, 4.75, 4); g.add(pan); }
         scene.add(g); group.push(g);
       }
       return {
-        update(uFront, visible) {
+        group,
+        // uFront: 앞 끝 위치, dir: +1 = 우리와 같은 방향, -1 = 마주 오는 방향, lat: 횡 위치
+        update(uFront, visible, dir, lat) {
+          dir = dir || 1;
           group.forEach((g, i) => {
             g.visible = visible;
             if (!visible) return;
-            const f = frame(uFront - 10 - i * 20, {});
-            g.position.set(f.x, f.y, f.z); g.rotation.y = -f.th;
+            const uc = uFront - dir * (10 + i * 20);
+            const f = frame(uc, {});
+            const l = typeof lat === 'function' ? lat(uc) : (lat || 0);
+            g.position.set(f.x + f.rx * l, f.y, f.z + f.rz * l); g.rotation.y = -f.th + (dir < 0 ? Math.PI : 0);
           });
         },
       };
-    })();
+    }
+    const leader = makeTrain(false);
+    const opposite = makeTrain(true);
+
+    // 표지·하늘·모니터 같은 자체 발광 그림은 톤매핑에서 제외 (색이 바래지 않게)
+    scene.traverse(o => {
+      const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+      ms.forEach(m => { if (m.isMeshBasicMaterial && m.blending !== THREE.AdditiveBlending) m.toneMapped = false; });
+    });
 
     function dispose() {
       scene.traverse(o => {
@@ -548,7 +802,7 @@ RS.World = (function () {
       });
     }
 
-    return { scene, frame, point, stationWiden, inTunnel: inT, tunnel: C.tunnel, leader, sky, dispose, monitors, routeInd };
+    return { scene, frame, point, stationWiden, inTunnel: inT, tunnel: C.tunnel, leader, opposite, sky, dispose, monitors, routeInd, otherOff: C.otherOffset };
   }
 
   return { build };

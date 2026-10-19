@@ -19,6 +19,8 @@
   const glCanvas = document.getElementById('gl');
   const renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;   // 밝은 조명·하늘이 하얗게 날아가지 않도록 톤매핑
+  renderer.toneMappingExposure = 1.0;
   const camera = new THREE.PerspectiveCamera(58, 1, 0.3, 1800);
   const ambient = new THREE.AmbientLight(0xffffff, 0.35);
   const hemi = new THREE.HemisphereLight(0xdfe9ff, 0x3a342c, 0.2);
@@ -41,8 +43,10 @@
 
   function startGame(o) {
     if (world) world.dispose();
+    if (typeof opp !== 'undefined') { opp.u = null; opp.next = new URLSearchParams(location.search).has('opp') ? 0.5 : 40; }
     sim = new RS.Sim(o);
     world = RS.World.build(sim.c);
+
     scene = world.scene;
     scene.add(ambient, hemi, sun, sun.target, head, head.target);
     scene.fog = new THREE.Fog(0x07080a, 40, 420);
@@ -106,21 +110,32 @@
     return { x: (_v.x + 1) / 2 * W, y: (1 - _v.y) / 2 * H };
   }
 
+  let sway = 0;
   function updateCamera() {
     const u = sim.u, vK = sim.vK;
-    const eye = world.point(u - 1.2, -0.55, 2.75, new THREE.Vector3());
-    eye.y += Math.sin(sim.t * 9) * 0.006 * Math.min(1, vK / 60);
+    // 운전실 흔들림: 곡선 원심력에 따른 쏠림·롤, 속도에 비례한 진동, 레일 이음매(25 m) 충격
+    const f1 = world.frame(u - 6), f2 = world.frame(u + 6);
+    const kappa = (f2.th - f1.th) / 12, v = sim.st.v;
+    const lat = v * v * kappa;                                  // 횡가속도(m/s²)
+    sway += (lat - sway) * Math.min(1, 0.04 * 60 * (1 / 60));
+    const sp = Math.min(1, vK / 70), t = sim.t;
+    const vib = (Math.sin(t * 13.1) * 0.6 + Math.sin(t * 23.7 + 1.3) * 0.4) * 0.007 * sp;
+    const jp = (u % 25) / 25, joint = jp < 0.03 ? -Math.sin(jp / 0.03 * Math.PI) * 0.012 * sp : 0;
+    const eye = world.point(u - 1.2, -0.55 - sway * 0.035, 2.75 + vib + joint, new THREE.Vector3());
     const look = world.point(u + 60, -0.3, 2.75 - 60 * Math.tan(9 * Math.PI / 180), new THREE.Vector3());
-    camera.position.copy(eye); camera.lookAt(look); camera.updateMatrixWorld();
+    camera.position.copy(eye); camera.lookAt(look);
+    camera.rotateZ(-sway * 0.012 + Math.sin(t * 7.3) * 0.0012 * sp);
+    camera.updateMatrixWorld();
     head.position.copy(world.point(u, 0, 1.4, new THREE.Vector3()));
     head.target.position.copy(world.point(u + 80, 0, 0, new THREE.Vector3()));
     const [T0, T1] = world.tunnel;
     const out = world.inTunnel(u) ? Math.max(0, Math.min(1, Math.max((u - (T1 - 350)) / 350, ((T0 + 350) - u) / 350))) : 1;
     const stW = world.stationWiden(u + 40);
-    ambient.intensity = 0.32 + 0.45 * stW + 0.4 * out;
-    hemi.intensity = 0.15 + 0.55 * out;
-    sun.intensity = 0.7 * out; sun.position.copy(camera.position).add(new THREE.Vector3(200, 300, 100)); sun.target.position.copy(camera.position);
-    head.intensity = 1.6 * (1 - out * 0.8);
+    // 터널 안 밝기는 정점 색(조명 베이킹)이 담당 → 주변광은 일정, 지상은 태양광·하늘광
+    ambient.intensity = 0.85 - 0.4 * out;
+    hemi.intensity = 0.05 + 0.6 * out;
+    sun.intensity = 0.85 * out; sun.position.copy(camera.position).add(new THREE.Vector3(200, 300, 100)); sun.target.position.copy(camera.position);
+    head.intensity = 1.3 * (1 - out * 0.8);
     scene.background.copy(DARK).lerp(SKY, out);
     scene.fog.color.copy(DARK).lerp(SKY, out);
     scene.fog.near = 40 + 200 * out; scene.fog.far = 420 + 1100 * out + 120 * stW;
@@ -134,7 +149,7 @@
   let running = false, last = performance.now();
   function frame(now) {
     requestAnimationFrame(frame);
-    const dt = Math.min(0.2, (now - last) / 1000);
+    const dt = Math.max(0, Math.min(0.2, (now - last) / 1000));
     last = now;
     if (!sim) { renderer.render(scene, camera); return; }
     if (running && !sim.finished) sim.step(dt);
@@ -142,6 +157,7 @@
     updateCamera();
     const ld = sim.leader.enabled ? sim.leader.rear - sim.u : null;
     world.leader.update(sim.leader.s, sim.leader.enabled && ld < 1500 && ld > -50);
+    updateOpposite(dt);
     updateStationDevices(dt);
     renderer.render(scene, camera);
     drawHUD();
@@ -150,6 +166,29 @@
   }
 
   let caption = null;
+
+  // 반대편 교행 열차: 약 2~3분마다 상대선으로 마주 지나감 (꽈배기 단선 구간에서는 안 보임)
+  const opp = { u: null, v: 65 / 3.6, next: 40, passed: false };
+  function updateOpposite(dt) {
+    if (!running || sim.finished) { world.opposite.update(0, false); return; }
+    if (opp.u === null) {
+      opp.next -= dt;
+      if (opp.next <= 0) { opp.u = sim.u + (new URLSearchParams(location.search).get('opp') === 'near' ? 220 : 1600 + Math.random() * 600); opp.passed = false; opp.v = (55 + Math.random() * 20) / 3.6; }
+      world.opposite.update(0, false);
+      return;
+    }
+    // 역 근처에서는 감속 (정차 흉내)
+    const nearSt = sim.c.stations.some(s => Math.abs(opp.u - s.u) < 150);
+    const vt = nearSt ? 25 / 3.6 : opp.v;
+    opp.cur = (opp.cur || vt) + Math.max(-1, Math.min(1, vt - (opp.cur || vt))) * dt;
+    opp.u -= opp.cur * dt;
+    const d = opp.u - sim.u;
+    const lat = (u) => { const o = world.otherOff(u); return o === null ? 0 : o; };
+    const vis = d > -260 && d < 1600 && world.otherOff(opp.u) !== null;
+    world.opposite.update(opp.u, vis, -1, lat);
+    if (!opp.passed && d < 60 && vis) { opp.passed = true; RS.Audio.passBy(world.inTunnel(sim.u) ? 0.55 : 0.3); }
+    if (d < -300) { opp.u = null; opp.next = 120 + Math.random() * 90; }
+  }
 
   // 승강장 모니터(정위치 표시) · 진로 개통 표시기
   let devT = 0;
@@ -220,7 +259,7 @@
       grade: c.gradeAt(sim.u), clock: fmtClock(sim.t), runTime: fmtRun(sim.t), doors: sim.doors,
       msg: sim.msgs[sim.msgs.length - 1] || null, sched,
       leaderDist: sim.leader.enabled && sim.leader.rear - sim.u > 0 && sim.leader.rear - sim.u < 3000 ? sim.leader.rear - sim.u : null,
-      refV, sCam, pos: posState(), caption: caption && performance.now() < caption.t ? caption.text : null,
+      refV, sCam, pos: posState(), loadPct: sim.loadPct, caption: caption && performance.now() < caption.t ? caption.text : null,
       ar: {
         stopMark: B && B.stop - sCam < 900 && B.stop - sCam > 3 ? B.stop : null,
         brakePoint: opts.guide && a.brakePointU != null && !stopBraking && a.brakePointU - sCam > 3 && a.brakePointU - sCam < 900 ? a.brakePointU : null,

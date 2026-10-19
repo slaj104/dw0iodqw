@@ -180,8 +180,19 @@ RS.Audio = (function () {
     if (synth) synth.cancel();
   }
 
+  // 교행 열차 지나가는 소리: 터널음을 높은 재생속도로 짧게 (커졌다 작아짐)
+  function passBy(vol) {
+    const b = buf.tunnel_rumble;
+    if (!ctx || muted || !b) return;
+    const s = ctx.createBufferSource(); s.buffer = b; s.playbackRate.value = 1.35;
+    const g = ctx.createGain(), t0 = ctx.currentTime;
+    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 1.2);
+    g.gain.setValueAtTime(vol, t0 + 2.6); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 4.5);
+    s.connect(g); g.connect(master); s.start(t0, Math.random() * 5); s.stop(t0 + 4.6);
+  }
+
   return {
-    init, update, play, announce,
+    init, update, play, announce, passBy,
     toggleAnn: () => { annOn = !annOn; if (!annOn) stopAnn(); return annOn; },
     stopAnn,
     codeChange: () => beep([1320], 0.35, 0.12),

@@ -303,7 +303,7 @@ RS.HUD = (function () {
       ['BC / MR', `${d.bc.toFixed(1)} / ${d.mr.toFixed(1)} kg/㎠`],
       ['전차선', d.sup === 'NONE' ? '무전압' : d.sup === 'AC' ? 'AC 25 kV' : 'DC 1500 V'],
       ['MCB · ADS', `${d.mcb ? 'ON' : 'OFF'} · ${d.ads}${d.regenCut ? ' · 회생차단' : ''}`],
-      ['CM(압축기)', d.cm ? '구동' : '정지'],
+      ['CM · 승차율', `${d.cm ? '구동' : '정지'} · ${d.loadPct}%`],
       ['운행 시간', d.runTime],
     ];
     const f = Math.max(10, Math.min(13, h / 14));
