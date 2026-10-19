@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>과천선 HUD 운전 시뮬레이터</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="gl"></canvas>
+<canvas id="hud"></canvas>
+<canvas id="cab"></canvas>
+<canvas id="dash"></canvas>
+
+<div id="menu" class="panel">
+  <h1>과천선 운전 시뮬레이터 <span>전면유리 HUD</span></h1>
+  <p class="sub">4호선 과천선 하행 · 남태령 → 금정 · 10량 전동차 · ATC 차상신호</p>
+  <div class="grid">
+    <label>출발역 <select id="startSt"></select></label>
+    <label>도착역 <select id="endSt"></select></label>
+    <label>승차율 <input id="optLoad" type="range" min="0" max="100" value="40"></label>
+    <label>제동 안내 기준 노치
+      <select id="optPlan">
+        <option value="3">B3 (1.5 km/h/s)</option>
+        <option value="4" selected>B4 (2.0 km/h/s)</option>
+        <option value="5">B5 (2.5 km/h/s)</option>
+      </select>
+    </label>
+    <label class="chk"><input id="optLeader" type="checkbox" checked> 선행열차 운행 (ATC 제한코드 발생)</label>
+  </div>
+  <table class="keys">
+    <tr><td>↑ / W</td><td>역행 쪽으로 (B → N → P1~P4)</td></tr>
+    <tr><td>↓ / S</td><td>제동 쪽으로 (P → N → B1~B7 → EB)</td></tr>
+    <tr><td>마우스 휠</td><td>주간제어기 이동</td></tr>
+    <tr><td>N</td><td>중립(N)</td></tr>
+    <tr><td>Space</td><td>비상제동(EB)</td></tr>
+    <tr><td>D</td><td>출입문 열기/닫기 (정지위치 ±5 m 이내)</td></tr>
+    <tr><td>H / M / Esc</td><td>HUD 켜기·끄기 / 소리 / 메뉴</td></tr>
+  </table>
+  <button id="startBtn">운행 시작</button>
+  <p class="small">노선 제원(역간거리·곡선·구배)은 시연용 근사값입니다. js/route.js 에서 수정할 수 있습니다.</p>
+</div>
+
+<div id="result" class="panel hidden">
+  <h1>운행 결과</h1>
+  <div id="resultBody"></div>
+  <button id="againBtn">메뉴로</button>
+</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="js/route.js"></script>
+<script src="js/physics.js"></script>
+<script src="js/atc.js"></script>
+<script src="js/predictor.js"></script>
+<script src="js/world.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/hud.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

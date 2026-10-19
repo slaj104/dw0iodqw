@@ -1,0 +1,33 @@
+:root { --bg: #0b0d10; --fg: #e8eef4; --accent: #72ffb0; --panel: rgba(14,18,22,0.92); --line: #2c343c; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--fg);
+  font-family: "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; }
+canvas { position: fixed; left: 0; top: 0; display: block; }
+#gl { z-index: 0; }
+#cab { z-index: 1; pointer-events: none; }
+#hud { z-index: 2; pointer-events: none; }
+#dash { z-index: 3; top: auto; bottom: 0; }
+.panel { position: fixed; z-index: 10; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 24px 28px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
+.hidden { display: none; }
+h1 { margin: 0 0 4px; font-size: 24px; }
+h1 span { color: var(--accent); font-size: 16px; margin-left: 6px; }
+.sub { margin: 0 0 18px; color: #9aa5b1; font-size: 14px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 18px; margin-bottom: 16px; }
+.grid label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #b9c3cd; }
+.grid label.chk { flex-direction: row; align-items: center; grid-column: 1 / -1; }
+select, input[type=range] { width: 100%; }
+select { background: #161b20; color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 6px; }
+.keys { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px; }
+.keys td { padding: 4px 6px; border-bottom: 1px solid #1d242b; }
+.keys td:first-child { color: var(--accent); font-family: Consolas, monospace; white-space: nowrap; width: 110px; }
+button { width: 100%; padding: 12px; font-size: 16px; font-weight: 700; border: 0; border-radius: 8px;
+  background: var(--accent); color: #062014; cursor: pointer; }
+button:hover { filter: brightness(1.1); }
+.small { font-size: 12px; color: #7d8894; margin: 10px 0 0; }
+#resultBody table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+#resultBody th, #resultBody td { padding: 6px; border-bottom: 1px solid #1d242b; text-align: left; }
+.gS, .gA { color: var(--accent); font-weight: 700; } .gB { color: #ffe08a; } .gC { color: #ffc04d; } .gX { color: #ff5050; font-weight: 700; }
+@media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
