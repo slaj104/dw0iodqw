@@ -31,3 +31,7 @@ button:hover { filter: brightness(1.1); }
 #resultBody th, #resultBody td { padding: 6px; border-bottom: 1px solid #1d242b; text-align: left; }
 .gS, .gA { color: var(--accent); font-weight: 700; } .gB { color: #ffe08a; } .gC { color: #ffc04d; } .gX { color: #ff5050; font-weight: 700; }
 @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+body { font-family: "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; }
+.panel { width: min(720px, calc(100vw - 32px)); }
+.keys td:first-child { width: 150px; }
+.gS { color: var(--accent); font-weight: 700; }

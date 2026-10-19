@@ -1,93 +1,109 @@
-// 효과음 (Web Audio API로 실시간 합성 → 외부 음원 파일 불필요)
+// 효과음: BigSoundBank(CC0) 실제 녹음 + Web Audio 합성(VVVF 인버터음, ATC 경보)
+//  rolling_interior : 파리 지하철 차내 주행음 → 속도에 따라 재생속도·음량 변화
+//  tunnel_rumble    : 터널 주행 굉음 (지하 구간)
+//  compressor       : 공기압축기(CM) 구동음, door_close/door_chime/air_release/horn
 window.RS = window.RS || {};
 
 RS.Audio = (function () {
-  let ctx = null, master, motorOsc, motorOsc2, motorGain, motorFilter, rollGain, rollFilter, alarmGain, alarmOsc;
-  let muted = false;
+  let ctx = null, master, muted = false;
+  const buf = {};
+  const loops = {};
+  let vvvf = null, alarm = null;
+
+  async function decode(name) {
+    const S = RS.ASSETS && RS.ASSETS.sfx;
+    if (!S || !S[name]) return null;
+    const b64 = S[name].split(',')[1];
+    const bin = atob(b64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    try { return await ctx.decodeAudioData(arr.buffer); } catch (e) { return null; }
+  }
+
+  function loop(name) {
+    if (!buf[name]) return null;
+    const src = ctx.createBufferSource(); src.buffer = buf[name]; src.loop = true;
+    const g = ctx.createGain(); g.gain.value = 0;
+    src.connect(g); g.connect(master); src.start();
+    return { src, g };
+  }
 
   function init() {
-    if (ctx) return;
+    if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     ctx = new AC();
-    master = ctx.createGain(); master.gain.value = 0.5; master.connect(ctx.destination);
+    master = ctx.createGain(); master.gain.value = 0.8;
+    const comp = ctx.createDynamicsCompressor();
+    master.connect(comp); comp.connect(ctx.destination);
 
-    // VVVF 인버터 + 견인전동기 소리
-    motorOsc = ctx.createOscillator(); motorOsc.type = 'sawtooth';
-    motorOsc2 = ctx.createOscillator(); motorOsc2.type = 'square';
-    motorFilter = ctx.createBiquadFilter(); motorFilter.type = 'bandpass'; motorFilter.Q.value = 3;
-    motorGain = ctx.createGain(); motorGain.gain.value = 0;
-    motorOsc.connect(motorFilter); motorOsc2.connect(motorFilter);
-    motorFilter.connect(motorGain); motorGain.connect(master);
-    motorOsc.start(); motorOsc2.start();
+    // VVVF 인버터 + 견인전동기 (합성)
+    const o1 = ctx.createOscillator(); o1.type = 'sawtooth';
+    const o2 = ctx.createOscillator(); o2.type = 'square';
+    const o3 = ctx.createOscillator(); o3.type = 'sine';
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 2.5;
+    const g2 = ctx.createGain(); g2.gain.value = 0.35;
+    const g = ctx.createGain(); g.gain.value = 0;
+    o1.connect(bp); o2.connect(g2); g2.connect(bp); o3.connect(g); bp.connect(g); g.connect(master);
+    o1.start(); o2.start(); o3.start();
+    vvvf = { o1, o2, o3, bp, g };
 
-    // 주행음 (필터링된 잡음)
-    const len = ctx.sampleRate * 2;
-    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    let last = 0;
-    for (let i = 0; i < len; i++) { last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = last * 3.5; }
-    const noise = ctx.createBufferSource(); noise.buffer = buf; noise.loop = true;
-    rollFilter = ctx.createBiquadFilter(); rollFilter.type = 'lowpass'; rollFilter.frequency.value = 400;
-    rollGain = ctx.createGain(); rollGain.gain.value = 0;
-    noise.connect(rollFilter); rollFilter.connect(rollGain); rollGain.connect(master);
-    noise.start();
+    const ao = ctx.createOscillator(); ao.type = 'square'; ao.frequency.value = 1180;
+    const ag = ctx.createGain(); ag.gain.value = 0;
+    ao.connect(ag); ag.connect(master); ao.start();
+    alarm = { ao, ag };
 
-    // ATC 과속 경보
-    alarmOsc = ctx.createOscillator(); alarmOsc.type = 'square'; alarmOsc.frequency.value = 1250;
-    alarmGain = ctx.createGain(); alarmGain.gain.value = 0;
-    alarmOsc.connect(alarmGain); alarmGain.connect(master);
-    alarmOsc.start();
-  }
-
-  let jointTimer = 0;
-  function update(dt, vKmh, tAct, bAct, alarm) {
-    if (!ctx) return;
-    const t = ctx.currentTime;
-    const f = 40 + vKmh * 14;
-    motorOsc.frequency.setTargetAtTime(f, t, 0.05);
-    motorOsc2.frequency.setTargetAtTime(vKmh < 12 ? 520 + vKmh * 30 : f * 1.5, t, 0.05);
-    motorFilter.frequency.setTargetAtTime(300 + vKmh * 25, t, 0.1);
-    const mg = muted ? 0 : Math.min(0.12, (tAct * 0.12 + Math.min(bAct, 0.6) * 0.06) * Math.min(1, vKmh / 3));
-    motorGain.gain.setTargetAtTime(mg, t, 0.08);
-    rollGain.gain.setTargetAtTime(muted ? 0 : Math.min(0.35, vKmh / 220), t, 0.2);
-    rollFilter.frequency.setTargetAtTime(200 + vKmh * 8, t, 0.2);
-    const on = alarm && !muted && (Math.floor(t * 4) % 2 === 0);
-    alarmGain.gain.setTargetAtTime(on ? 0.06 : 0, t, 0.01);
-
-    // 레일 이음매 소리 (덜컹)
-    if (vKmh > 3) {
-      jointTimer -= dt * vKmh / 3.6;
-      if (jointTimer <= 0) { jointTimer = 25; clack(); setTimeout(clack, Math.max(40, 18000 / vKmh / 3.6 * 0.12)); }
-    }
-  }
-
-  function clack() {
-    if (!ctx || muted) return;
-    const o = ctx.createOscillator(), g = ctx.createGain();
-    o.type = 'triangle'; o.frequency.value = 90;
-    g.gain.value = 0.12; g.gain.setTargetAtTime(0, ctx.currentTime, 0.03);
-    o.connect(g); g.connect(master); o.start(); o.stop(ctx.currentTime + 0.15);
-  }
-
-  function chime(freqs) {
-    if (!ctx || muted) return;
-    freqs.forEach((fr, i) => {
-      const o = ctx.createOscillator(), g = ctx.createGain();
-      const t0 = ctx.currentTime + i * 0.18;
-      o.type = 'sine'; o.frequency.value = fr;
-      g.gain.setValueAtTime(0.0001, t0);
-      g.gain.exponentialRampToValueAtTime(0.18, t0 + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.6);
-      o.connect(g); g.connect(master); o.start(t0); o.stop(t0 + 0.65);
+    ['rolling_interior', 'tunnel_rumble', 'compressor', 'door_close', 'door_chime', 'air_release', 'horn'].forEach(async n => {
+      buf[n] = await decode(n);
+      if (['rolling_interior', 'tunnel_rumble', 'compressor'].includes(n) && buf[n]) loops[n] = loop(n);
     });
   }
 
+  function play(name, gain, rate) {
+    if (!ctx || muted || !buf[name]) return;
+    const s = ctx.createBufferSource(); s.buffer = buf[name]; s.playbackRate.value = rate || 1;
+    const g = ctx.createGain(); g.gain.value = gain == null ? 0.8 : gain;
+    s.connect(g); g.connect(master); s.start();
+  }
+
+  function beep(freqs, dur, vol) {
+    if (!ctx || muted) return;
+    freqs.forEach((fr, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      const t0 = ctx.currentTime + i * 0.16;
+      o.type = 'sine'; o.frequency.value = fr;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(vol || 0.15, t0 + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + (dur || 0.5));
+      o.connect(g); g.connect(master); o.start(t0); o.stop(t0 + (dur || 0.5) + 0.05);
+    });
+  }
+
+  // 매 프레임: 속도·역행/제동·지하 여부에 따라 음량/음높이 조절
+  function update(dt, s) {
+    if (!ctx) return;
+    const t = ctx.currentTime, vK = s.vK, m = muted ? 0 : 1;
+    const set = (p, v, tc) => p.setTargetAtTime(v, t, tc || 0.15);
+    const roll = loops.rolling_interior, tun = loops.tunnel_rumble, cm = loops.compressor;
+    if (roll) { set(roll.g.gain, m * Math.min(0.55, 0.05 + vK / 140)); set(roll.src.playbackRate, 0.55 + vK / 110); if (vK < 0.5) set(roll.g.gain, 0); }
+    if (tun) { set(tun.g.gain, m * (s.tunnel ? Math.min(0.5, vK / 150) : 0.02 * vK / 80), 0.4); set(tun.src.playbackRate, 0.6 + vK / 160); }
+    if (cm) set(cm.g.gain, m * (s.cm ? 0.18 : 0), 0.3);
+    // VVVF: 저속 비동기 변조(캐리어 일정) → 고속 동기 변조
+    const f = 18 + vK * 9.5;
+    const carrier = vK < 15 ? 520 + Math.floor(vK / 3) * 70 : f * (vK < 40 ? 9 : vK < 60 ? 5 : 3);
+    set(vvvf.o1.frequency, f, 0.05); set(vvvf.o2.frequency, carrier, 0.03); set(vvvf.o3.frequency, f / 2, 0.05);
+    set(vvvf.bp.frequency, 260 + vK * 22, 0.1);
+    const load = Math.max(s.tAct, Math.min(1, s.bAct * 1.6) * (s.regen ? 0.8 : 0.25));
+    set(vvvf.g.gain, m * Math.min(0.16, load * 0.16) * Math.min(1, vK / 2), 0.08);
+    const on = s.alarm && !muted && (Math.floor(t * 5) % 2 === 0);
+    alarm.ag.gain.setTargetAtTime(on ? 0.05 : 0, t, 0.01);
+  }
+
   return {
-    init, update,
-    codeChange: () => chime([1046]),
-    door: () => chime([784, 659]),
-    notch: () => chime([2200]),
+    init, update, play,
+    codeChange: () => beep([1320], 0.35, 0.12),
+    notch: () => beep([2600], 0.04, 0.05),
+    call: () => beep([880, 1320], 0.2, 0.08),
     toggleMute: () => { muted = !muted; return muted; },
   };
 })();

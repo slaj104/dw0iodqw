@@ -1,8 +1,7 @@
-// 열차 운동 모델 (10량 전동차, 단일핸들 주간제어기 P4~N~B7~EB)
+// 열차 운동 모델 (10량 전동차, 동력 핸들 1~4단 / 제동 핸들 1~7단·비상)
 window.RS = window.RS || {};
 
 RS.Physics = (function () {
-  const R = RS.ROUTE;
   const KMH = 3.6;
   const G = 9.81;
 
@@ -50,11 +49,11 @@ RS.Physics = (function () {
     return { s: st.s, v: st.v, bAct: st.bAct, tAct: st.tAct, bDelay: st.bDelay, lastBCmd: st.lastBCmd };
   }
 
-  // env: { loadFactor, tractionCut(bool) }
+  // env: { loadFactor, tractionCut(bool), gradeAt(u) }
   function step(st, notch, dt, env) {
     // 제동 지령
     const bc = brakeCmd(notch);
-    if (bc > st.lastBCmd + 1e-6) st.bDelay = P.brakeDeadTime; // 제동 증가 지령 시 공주시간
+    if (bc > st.lastBCmd + 1e-6 && st.bAct < 0.02) st.bDelay = P.brakeDeadTime; // 완해 상태에서 제동 지령 시 공주시간
     st.lastBCmd = bc;
     if (st.bDelay > 0) {
       st.bDelay -= dt;
@@ -72,7 +71,7 @@ RS.Physics = (function () {
     st.tAct += Math.max(-rT, Math.min(rT, dT));
     if (env.tractionCut && st.tAct > 0) st.tAct = Math.max(0, st.tAct - 3 * dt);
 
-    const grade = R.gradeAt(st.s);
+    const grade = env.gradeAt(st.s);
     const aTrac = st.tAct * tractionMax(st.v, env.loadFactor);
     const aGrade = -G * grade / 1000;
     let a = aTrac + aGrade;
