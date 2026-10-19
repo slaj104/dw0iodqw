@@ -21,7 +21,7 @@ STATIONS = [  # js/route.js 의 RS.LINE.stations 와 같은 순서 (idx)
 SAY_EN = {
     'Namtaeryeong': 'Nam-tae-ryung', 'Seonbawi': 'Sun-bah-wee', 'Seoul Racecourse Park': 'Seoul Race-course Park',
     'Seoul Grand Park': 'Seoul Grand Park', 'Gwacheon': 'Gwah-chun', 'Government Complex Gwacheon': 'Government Complex Gwah-chun',
-    'Indeogwon': 'In-dug-won', 'Pyeongchon': 'Pyung-chon', 'Beomgye': 'Bum-gyeh', 'Geumjeong': 'Geum-jung', 'Sanbon': 'Sahn-bon',
+    'Indeogwon': 'In-dug-won', 'Pyeongchon': 'Pyung-chon', 'Beomgye': 'Bum-gay', 'Geumjeong': 'Gum-jung', 'Sanbon': 'Sahn-bon',
 }
 
 def lines():
