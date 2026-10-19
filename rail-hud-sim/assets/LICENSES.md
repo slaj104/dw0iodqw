@@ -28,6 +28,10 @@
 
 VVVF 인버터음·ATC 경보음·출입문 차임·발차 버저는 Web Audio로 합성 (파일 없음).
 
+## 안내방송 음성 — MeloTTS (MIT License, MyShell.ai) https://github.com/myshell-ai/MeloTTS
+`assets/voice/*.mp3` 는 `tools/make_voice.py` 로 MeloTTS(한국어 KR, 영어 EN-US)에서 직접 합성한 뒤
+차내 방송 스피커 음색 처리를 한 파일입니다. 실제 철도 운영기관의 녹음이 아니므로 저작권 문제 없음.
+
 ## 폰트 — Noto Sans KR (SIL Open Font License 1.1)
 `assets/font/OFL.txt` 참고. @fontsource/noto-sans-kr 5.0.19 의 woff2 사용.
 

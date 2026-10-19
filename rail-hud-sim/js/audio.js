@@ -109,26 +109,81 @@ RS.Audio = (function () {
     const v = voices.filter(x => x.lang && x.lang.replace('_', '-').toLowerCase().startsWith(lang.slice(0, 2).toLowerCase()));
     return v.find(x => /female|여|heami|yuna|sunhi|google/i.test(x.name)) || v[0] || null;
   }
+  // 녹음된 안내방송(assets/voice, 신경망 TTS + 방송 스피커 음색)을 순서대로 재생. 없으면 브라우저 TTS
+  const voiceBuf = {};
+  let annQueue = [], annBusy = false, annSrc = null, annGain = null;
+  async function voice(key) {
+    if (voiceBuf[key] !== undefined) return voiceBuf[key];
+    const V = RS.ASSETS && RS.ASSETS.voice;
+    if (!ctx || !V || !V[key]) return (voiceBuf[key] = null);
+    const bin = atob(V[key].split(',')[1]);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    try { voiceBuf[key] = await ctx.decodeAudioData(arr.buffer); } catch (e) { voiceBuf[key] = null; }
+    return voiceBuf[key];
+  }
+  function speakTTS(l) {
+    return new Promise(res => {
+      if (!synth) return res();
+      const ut = new SpeechSynthesisUtterance(l.ko || l.en);
+      ut.lang = l.lang || 'ko-KR';
+      const v = pickVoice(ut.lang); if (v) ut.voice = v;
+      ut.rate = 1.0; ut.volume = 0.9; ut.onend = ut.onerror = () => res();
+      synth.speak(ut);
+    });
+  }
+  function playBuf(b) {
+    return new Promise(res => {
+      if (!annGain) { annGain = ctx.createGain(); annGain.gain.value = 1.0; annGain.connect(master); }
+      const s = ctx.createBufferSource(); s.buffer = b; s.connect(annGain);
+      s.onended = () => { annSrc = null; res(); };
+      annSrc = s; s.start();
+    });
+  }
+  async function runQueue() {
+    if (annBusy) return;
+    annBusy = true;
+    while (annQueue.length) {
+      const lines = annQueue.shift();
+      chime();
+      await new Promise(r => setTimeout(r, 1300));
+      for (const l of lines) {
+        if (!annOn || muted) break;
+        const b = l.key ? await voice(l.key) : null;
+        if (b) await playBuf(b); else await speakTTS(l);
+        await new Promise(r => setTimeout(r, 250));
+      }
+    }
+    annBusy = false;
+  }
+  // 안내 차임 (도-미-솔 계열의 부드러운 3음)
+  function chime() {
+    if (!ctx || muted) return;
+    [[784, 0], [988, 0.32], [1175, 0.64]].forEach(([f, d]) => {
+      const t0 = ctx.currentTime + d;
+      for (const [mul, vol] of [[1, 0.05], [2, 0.012], [3, 0.006]]) {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = f * mul;
+        g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.1);
+        o.connect(g); g.connect(master); o.start(t0); o.stop(t0 + 1.15);
+      }
+    });
+  }
   function announce(lines) {
-    if (!synth || !annOn || muted) return;
-    beep([1047, 880, 784, 880], 0.35, 0.04);           // 안내 차임
-    setTimeout(() => {
-      lines.forEach(l => {
-        const text = l.ko || l.en;
-        if (!text) return;
-        const ut = new SpeechSynthesisUtterance(text);
-        ut.lang = l.lang || 'ko-KR';
-        const v = pickVoice(ut.lang); if (v) ut.voice = v;
-        ut.rate = ut.lang === 'ko-KR' ? 1.05 : 1.0; ut.pitch = 1.05; ut.volume = 0.9;
-        synth.speak(ut);
-      });
-    }, 900);
+    if (!annOn || muted || !ctx) return;
+    annQueue.push(lines);
+    runQueue();
+  }
+  function stopAnn() {
+    annQueue = [];
+    if (annSrc) { try { annSrc.stop(); } catch (e) {} annSrc = null; }
+    if (synth) synth.cancel();
   }
 
   return {
     init, update, play, announce,
-    toggleAnn: () => { annOn = !annOn; if (!annOn && synth) synth.cancel(); return annOn; },
-    stopAnn: () => { if (synth) synth.cancel(); },
+    toggleAnn: () => { annOn = !annOn; if (!annOn) stopAnn(); return annOn; },
+    stopAnn,
     codeChange: () => beep([1320], 0.35, 0.12),
     // 출입문: 작은 차임 + 약한 공기음 (녹음 대신 부드러운 합성음)
     doorOpen: () => { beep([659, 880], 0.45, 0.035); play('air_release', 0.1, 0.85); },
@@ -136,6 +191,6 @@ RS.Audio = (function () {
     buzzer: () => beep([1500, 1500], 0.12, 0.04),
     notch: () => beep([2600], 0.04, 0.05),
     call: () => beep([880, 1320], 0.2, 0.08),
-    toggleMute: () => { muted = !muted; if (muted && synth) synth.cancel(); return muted; },
+    toggleMute: () => { muted = !muted; if (muted) stopAnn(); return muted; },
   };
 })();
