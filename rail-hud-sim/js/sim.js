@@ -4,7 +4,7 @@ window.RS = window.RS || {};
 
 RS.Sim = (function () {
   const Ph = RS.Physics, KMH = 3.6;
-  const DWELL = 20;
+  const DWELL = 8;   // 승하차(출입문 열림) 최소 시간 s
 
   class Sim {
     constructor(o) {
@@ -95,7 +95,7 @@ RS.Sim = (function () {
     toggleDoors() {
       const B = this.nextStation;
       if (this.doors) {
-        if (this.dwell < 8) { this.flash('승객 승하차 중…', '#ffc04d', 1.5); return; }
+        if (this.dwell < 4) { this.flash('승객 승하차 중…', '#ffc04d', 1.5); return; }
         this.doors = false; this.veh.doors = false; this.events.push('doorClose');
         this.announce('close', [{ key: 'close', ko: '출입문 닫습니다.' }]);
         // 역마다 승하차로 승차율 변화 → 하중에 따라 가속도 변화 (제동은 응하중이라 일정)

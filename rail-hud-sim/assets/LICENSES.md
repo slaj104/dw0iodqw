@@ -15,6 +15,18 @@
 | leafy_grass | https://polyhaven.com/a/leafy_grass | 지상 구간 지면 |
 | sky_kloofendal_48d.jpg | https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky | 하늘 (HDRI 톤매핑 JPG) |
 
+| rusty_metal_02, concrete_floor_02 | https://polyhaven.com/a/rusty_metal_02 , https://polyhaven.com/a/concrete_floor_02 | 레일, 바닥·침목 |
+
+텍스처는 1K 색(diff)·노멀(nor)·ARM(AO/거칠기/금속) 맵을 씀 (`tools/fetch_assets.py` 로 다운로드).
+
+## 건물 외벽 — ambientCG (CC0 1.0) https://ambientcg.com
+| facade006 | https://ambientcg.com/view?id=Facade006 | 아파트 외벽 |
+| facade002 | https://ambientcg.com/view?id=Facade002 | 사무동 외벽 |
+
+## 3D 모델 — Poly Haven (CC0 1.0), 텍스처 512px 로 줄여 glTF 하나로 묶음 (`assets/models/`)
+korean_fire_extinguisher_01(소화기), security_camera_01(감시카메라), power_box_01·utility_box_01·utility_box_02(배전함·함체),
+street_lamp_01(가로등), shrub_02(관목), metal_trash_can(쓰레기통), mounted_fluorescent_lights — https://polyhaven.com/models
+
 ## 효과음 — BigSoundBank, Joseph SARDIN (CC0 1.0) https://bigsoundbank.com/licenses.html
 필요한 부분만 잘라 루프로 가공
 

@@ -41,8 +41,9 @@ RS.World = (function () {
     return t;
   }
 
-  function build(course) {
+  function build(course, quality) {
     const C = course;
+    const Q = quality == null ? 2 : quality; // 0 낮음, 1 보통, 2 높음
     const scene = new THREE.Scene();
 
     // ───── 선형 ─────
@@ -104,6 +105,7 @@ RS.World = (function () {
       g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
       g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
       if (light) g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+      g.setAttribute('uv2', g.attributes.uv);
       g.setIndex(idx);
       g.computeVertexNormals();
       return g;
@@ -115,7 +117,9 @@ RS.World = (function () {
       for (let a = u0; a < u1; a += chunk) {
         const b = Math.min(u1, a + chunk);
         if (b - a < step) continue;
-        scene.add(new THREE.Mesh(sweep(a, b, step, prof, uS, vS, light), mat));
+        const mesh = new THREE.Mesh(sweep(a, b, step, prof, uS, vS, light), mat);
+        mesh.receiveShadow = !light;
+        scene.add(mesh);
       }
     }
     const tmpC = new THREE.Color(), tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpE = new THREE.Euler(), tmpP = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
@@ -134,6 +138,57 @@ RS.World = (function () {
       scene.add(im);
       return im;
     }
+    // glTF 모델 배치 (Poly Haven CC0): 300 m 구역별 InstancedMesh, 구역마다 경계 구를 줘서 화면 밖은 안 그림
+    const V3 = THREE.Vector3;
+    function placeModel(name, items, opt) {
+      const src = RS.MODELS && RS.MODELS[name];
+      if (!src || !items.length) return;
+      opt = opt || {};
+      src.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(src), size = box.getSize(new V3());
+      const s = opt.height ? opt.height / size.y : (opt.scale || 1);
+      const parts = [];
+      src.traverse(o => {
+        if (!o.isMesh) return;
+        const g = o.geometry.clone();
+        g.applyMatrix4(o.matrixWorld);
+        g.translate(-(box.min.x + box.max.x) / 2, -box.min.y, -(box.min.z + box.max.z) / 2);
+        g.scale(s, s, s);
+        if (g.attributes.uv && !g.attributes.uv2) g.setAttribute('uv2', g.attributes.uv);
+        const mt = o.material.clone();
+        if (opt.bake) mt.userData.bake = true;
+        parts.push({ g, m: mt });
+      });
+      const rad = size.length() * s;
+      const groups = {};
+      items.forEach(it => { const k = Math.floor(it.u / 300); (groups[k] = groups[k] || []).push(it); });
+      const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), pos = new V3(), sc = new V3();
+      for (const k in groups) {
+        const list = groups[k], pts = [];
+        const mats = list.map(it => {
+          const f = frame(it.u, {});
+          point(it.u, it.l, it.h, pos);
+          e.set(0, -f.th + (it.ry || 0), 0); q.setFromEuler(e);
+          const ss = it.s || 1; sc.set(ss, ss, ss);
+          pts.push(pos.clone());
+          return m4.clone().compose(pos, q, sc);
+        });
+        const sphere = new THREE.Sphere().setFromPoints(pts); sphere.radius += rad;
+        for (const p of parts) {
+          const g2 = new THREE.BufferGeometry();
+          g2.index = p.g.index; for (const a in p.g.attributes) g2.setAttribute(a, p.g.attributes[a]);
+          g2.groups = p.g.groups; g2.boundingSphere = sphere;
+          const im = new THREE.InstancedMesh(g2, p.m, list.length);
+          mats.forEach((mm, i) => {
+            im.setMatrixAt(i, mm);
+            if (opt.bake) { const c = bake(list[i].u, list[i].l, list[i].h + 0.3); tmpC.setRGB(c[0], c[1], c[2]); im.setColorAt(i, tmpC); }
+          });
+          im.frustumCulled = true; im.castShadow = !!opt.shadow; im.receiveShadow = !!opt.shadow;
+          scene.add(im);
+        }
+      }
+    }
+
     function plane(u, l, h, w, hh, mat, ry) {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(w, hh), mat);
       const f = frame(u, {});
@@ -169,31 +224,41 @@ RS.World = (function () {
 
     // ───── 재질 ─────
     const ph = (o) => new THREE.MeshPhongMaterial(Object.assign({ side: THREE.DoubleSide, shininess: 8 }, o));
+    // PBR 재질: 색·노멀·ARM(R=AO, G=거칠기) 맵 (Poly Haven CC0 1K)
+    const std = (name, o, fb) => {
+      const arm = assetTex(name + '_arm');
+      return new THREE.MeshStandardMaterial(Object.assign({
+        side: THREE.DoubleSide, map: assetTex(name + '_diff', fb), normalMap: assetTex(name + '_nor'),
+        normalScale: new THREE.Vector2(1.2, 1.2), roughness: 1, metalness: 0,
+        aoMap: arm, aoMapIntensity: 1, roughnessMap: arm,
+      }, o));
+    };
     const baked = (m) => { const n = m.clone(); n.vertexColors = true; return n; };
     const bakedInst = (m) => { const n = m.clone(); n.userData.bake = true; return n; };
     const M = {
-      tunnel: ph({ map: assetTex('concrete_wall_008_diff', () => noiseTexture('#77746e', 30, 128, 128)), normalMap: assetTex('concrete_wall_008_nor'), color: 0x8e8b84 }),
-      slab: ph({ map: assetTex('gravel_concrete_diff', () => noiseTexture('#8d8a84', 22, 64, 64)), normalMap: assetTex('gravel_concrete_nor'), color: 0xa8a49c }),
-      ballast: ph({ map: assetTex('gravel_stones_diff', () => noiseTexture('#7a746c', 90, 128, 128)), normalMap: assetTex('gravel_stones_nor'), color: 0xb0a89c }),
-      ground: ph({ map: assetTex('leafy_grass_diff', () => noiseTexture('#5d6b47', 40, 128, 128)), normalMap: assetTex('leafy_grass_nor'), color: 0x8fb06a }),
-      platform: ph({ map: assetTex('large_grey_tiles_diff', () => noiseTexture('#b8b4aa', 18, 128, 128)), normalMap: assetTex('large_grey_tiles_nor'), shininess: 30, color: 0xa8a6a2 }),
-      wallTile: ph({ map: assetTex('long_white_tiles_diff', () => noiseTexture('#e8e6e0', 10, 128, 128)), normalMap: assetTex('long_white_tiles_nor'), shininess: 40, color: 0xcfcfcc }),
-      concrete: ph({ map: assetTex('concrete_wall_008_diff', () => noiseTexture('#8a8780', 20, 64, 64)), color: 0xc8c4bc }),
-      rail: new THREE.MeshPhongMaterial({ color: 0x6f7378, shininess: 60, specular: 0x555555 }),
-      railTop: new THREE.MeshBasicMaterial({ color: 0xc9cdd2 }),
-      sleeper: new THREE.MeshLambertMaterial({ color: 0x5e5b55 }),
+      tunnel: std('concrete_wall_008', { color: 0x9c9890 }, () => noiseTexture('#77746e', 30, 128, 128)),
+      slab: std('gravel_concrete', { color: 0xb0aca4, roughness: 0.95 }, () => noiseTexture('#8d8a84', 22, 64, 64)),
+      ballast: std('gravel_stones', { color: 0xbab2a6 }, () => noiseTexture('#7a746c', 90, 128, 128)),
+      ground: std('leafy_grass', { color: 0x9cbf74 }, () => noiseTexture('#5d6b47', 40, 128, 128)),
+      platform: std('large_grey_tiles', { color: 0xb4b2ae, roughness: 0.7 }, () => noiseTexture('#b8b4aa', 18, 128, 128)),
+      wallTile: std('long_white_tiles', { color: 0xd8d8d4, roughness: 0.45 }, () => noiseTexture('#e8e6e0', 10, 128, 128)),
+      concrete: std('concrete_floor_02', { color: 0xc8c4bc }, () => noiseTexture('#8a8780', 20, 64, 64)),
+      rail: std('rusty_metal_02', { color: 0x9a948c, metalness: 0.55, roughness: 0.75 }),
+      railTop: new THREE.MeshStandardMaterial({ color: 0xd8dde2, metalness: 0.9, roughness: 0.25 }),
+      sleeper: std('concrete_floor_02', { color: 0x9a978f }),
       lamp: new THREE.MeshBasicMaterial({ color: 0xfff1cf }),
       lampCool: new THREE.MeshBasicMaterial({ color: 0xf2f8ff }),
-      wire: new THREE.MeshPhongMaterial({ color: 0x5a4a32, specular: 0x886644, shininess: 40 }),
+      wire: new THREE.MeshStandardMaterial({ color: 0x6a5236, metalness: 0.7, roughness: 0.45 }),
       deadWire: new THREE.MeshBasicMaterial({ color: 0xe0782a }),
-      yellow: new THREE.MeshLambertMaterial({ color: 0xf2c200, emissive: 0x2a2000, side: THREE.DoubleSide }),
+      yellow: new THREE.MeshStandardMaterial({ color: 0xf2c200, roughness: 0.6, side: THREE.DoubleSide }),
       psdGlass: new THREE.MeshPhongMaterial({ color: 0xb7d8e6, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false, shininess: 90 }),
-      psdFrame: new THREE.MeshPhongMaterial({ color: 0xc9ccd0, shininess: 50 }),
-      pole: new THREE.MeshPhongMaterial({ color: 0x8a8f94 }),
-      dark: new THREE.MeshLambertMaterial({ color: 0x2a2d32 }),
-      sigHead: new THREE.MeshLambertMaterial({ color: 0x15171a }),
+      psdFrame: new THREE.MeshStandardMaterial({ color: 0xc9ccd0, metalness: 0.6, roughness: 0.35 }),
+      pole: new THREE.MeshStandardMaterial({ color: 0x8a8f94, metalness: 0.5, roughness: 0.55 }),
+      dark: new THREE.MeshStandardMaterial({ color: 0x2f3237, roughness: 0.8 }),
+      sigHead: new THREE.MeshStandardMaterial({ color: 0x15171a, roughness: 0.6 }),
       green: new THREE.MeshBasicMaterial({ color: 0x3dff8a }),
     };
+    M.sleeper.map && M.sleeper.map.repeat.set(1, 0.3);
 
     const [T0, T1] = C.tunnel;
     const inT = (u) => u >= T0 && u <= T1;
@@ -228,9 +293,13 @@ RS.World = (function () {
       const lamp = 0.9 * (lampSum(lampsL, u, L, l, h) + lampSum(lampsR, u, R, l, h));
       const day = Math.max(0, 1 - Math.min(u - T0, T1 - u) / 70) * (C.uMin < T0 || C.uMax > T1 ? 1 : 0);
       const base = 0.07;
-      const r = base + lamp * 1.0 + w * 1.05 + day * 0.9;
-      const g = base + lamp * 0.92 + w * 1.08 + day * 0.95;
-      const bl = base * 1.1 + lamp * 0.78 + w * 1.12 + day * 1.0;
+      // 가짜 AO: 벽-바닥 접합부와 아치 시작부를 어둡게 (명암 강조)
+      const dw = Math.min(Math.abs(l - L), Math.abs(R - l));
+      const ao = (1 - 0.5 * Math.exp(-dw / 0.7) * Math.exp(-Math.max(0, h + 0.4) / 0.9)) * (1 - 0.25 * Math.exp(-Math.abs(h - 4.2) / 0.5) * Math.exp(-dw / 0.5)) * (h < -0.3 && dw > 1 ? 0.92 : 1);
+      const lampA = lamp * ao, baseA = base * ao;
+      const r = baseA + lampA * 1.0 + w * 1.05 * ao + day * 0.9;
+      const g = baseA + lampA * 0.92 + w * 1.08 * ao + day * 0.95;
+      const bl = baseA * 1.1 + lampA * 0.78 + w * 1.12 * ao + day * 1.0;
       return [r, g, bl];
     }
     const otherSmoothRef = (u) => otherSmooth(u);
@@ -276,15 +345,18 @@ RS.World = (function () {
       const o = otherSmooth(u), w = stationWiden(u), side = stationSide(u);
       let L = Math.min(0, o) - 3.0, R = Math.max(0, o) + 3.0;
       if (side > 0) R += 4.8 * w; else if (side < 0) L -= 4.8 * w;
-      const top = 5.9 + 1.5 * w, mid = (L + R) / 2;
-      return [[L, -0.4], [L, 4.2 + 0.9 * w], [L + 1.2, top - 0.4], [mid, top], [R - 1.2, top - 0.4], [R, 4.2 + 0.9 * w], [R, -0.4]];
+      const top = 5.9 + 1.5 * w, mid = (L + R) / 2, wt = 4.2 + 0.9 * w;
+      const pts = [[L, -0.4], [L, 0.9], [L, 2.4], [L, wt]];
+      for (let k = 1; k < 10; k++) { const an = Math.PI - Math.PI * k / 10; pts.push([mid + Math.cos(an) * (R - L) / 2, wt + Math.sin(an) * (top - wt)]); }
+      pts.push([R, wt], [R, 2.4], [R, 0.9], [R, -0.4]);
+      return pts;
     };
     for (const [a, b] of tunnelRanges) {
       chunks(a, b, 2, tunnelProfile, M.tunnelB, 300, 0.22, 0.22);
-      chunks(a, b, 2, (u) => { const p = tunnelProfile(u); return [[p[0][0], -0.38], [p[6][0], -0.38]]; }, M.concreteB, 400, 0.25, 0.25);
+      chunks(a, b, 2, (u) => { const p = tunnelProfile(u), L = p[0][0], R = p[p.length - 1][0]; return [0, 0.08, 0.25, 0.5, 0.75, 0.92, 1].map(f => [L + (R - L) * f, -0.38]); }, M.concreteB, 400, 0.25, 0.25);
       // 터널 설비: 대피통로(상대선 반대쪽 벽), 케이블 트레이, 소화 배관 — 역 구간에서는 접힘
       const outer = (u) => { const o = C.otherOffset(u); return o !== null && o > 0 ? -1 : 1; }; // 대피통로 쪽
-      const wallX = (u, s) => { const p = tunnelProfile(u); return s < 0 ? p[0][0] : p[6][0]; };
+      const wallX = (u, s) => { const p = tunnelProfile(u); return s < 0 ? p[0][0] : p[p.length - 1][0]; };
       const fold = (u) => 1 - stationWidenRaw(u);
       chunks(a, b, 4, (u) => { const s = outer(u), W = wallX(u, s), k = fold(u) * 0.85; return [[W - s * 0.02, 0.62 * fold(u) - 0.38 * (1 - fold(u))], [W - s * k, 0.62 * fold(u) - 0.38 * (1 - fold(u))], [W - s * k, -0.38]]; }, M.concreteB, 400, 0.4, 0.4);
       chunks(a, b, 4, (u) => { const s = outer(u), W = wallX(u, s), k = fold(u) * 0.85; return [[W - s * k, 0.66 * fold(u)], [W - s * k, 1.6 * fold(u)]]; }, M.darkB, 500);
@@ -303,11 +375,22 @@ RS.World = (function () {
       const exits = [];
       for (let u = a + 25; u < b; u += 50) { if (stationWidenRaw(u) > 0.01) continue; const s = outer(u); exits.push({ u, l: wallX(u, s) - s * 0.03, h: 1.15, ry: s > 0 ? -Math.PI / 2 : Math.PI / 2 }); }
       instances(new THREE.PlaneGeometry(0.55, 0.2), exitMat, exits);
+      const pb = [], ub = [], fe = [];
+      for (let u = a + 60; u < b; u += 120) {
+        if (stationWidenRaw(u) > 0.01) continue;
+        const s = outer(u);
+        pb.push({ u, l: wallX(u, -s) + s * 0.06, h: 1.0, ry: s > 0 ? Math.PI / 2 : -Math.PI / 2 });
+        ub.push({ u: u + 40, l: wallX(u + 40, s) - s * 0.3, h: 0.62, ry: s > 0 ? -Math.PI / 2 : Math.PI / 2 });
+        fe.push({ u: u + 15, l: wallX(u + 15, s) - s * 0.2, h: 0.62, ry: s > 0 ? -Math.PI / 2 : Math.PI / 2 });
+      }
+      placeModel('power_box_01', pb, { height: 0.7, bake: true });
+      placeModel('utility_box_01', ub, { height: 1.1, bake: true });
+      placeModel('korean_fire_extinguisher_01', fe, { height: 0.62, bake: true });
       const lamps = [], br = [];
       for (let u = a; u < b; u += 12) {
         if (stationWiden(u) > 0.05) continue;
         const p = tunnelProfile(u);
-        lamps.push({ u, l: p[0][0] + 0.06, h: 3.5 }); lamps.push({ u: u + 6, l: p[6][0] - 0.06, h: 3.5 });
+        lamps.push({ u, l: p[0][0] + 0.06, h: 3.5 }); lamps.push({ u: u + 6, l: p[p.length - 1][0] - 0.06, h: 3.5 });
       }
       for (let u = a; u < b; u += 8) br.push({ u, l: 0, h: 5.35 });
       instances(new THREE.BoxGeometry(0.07, 0.1, 1.0), M.lamp, lamps);
@@ -322,7 +405,7 @@ RS.World = (function () {
       instances(new THREE.PlaneGeometry(2.4, 1.0), glowMat, lamps.map(it => ({ u: it.u, l: it.l + (it.l < 0 ? 0.08 : -0.08), h: it.h, ry: Math.PI / 2 })));
       for (const edge of [a, b]) {
         if (edge <= C.uMin + 1 || edge >= C.uMax - 1) continue;
-        const p = tunnelProfile(edge), L = p[0][0], R = p[6][0];
+        const p = tunnelProfile(edge), L = p[0][0], R = p[p.length - 1][0];
         const ry = edge === a ? Math.PI : 0;
         plane(edge, L - 15, 6, 30, 16, M.concrete, ry);
         plane(edge, R + 15, 6, 30, 16, M.concrete, ry);
@@ -346,13 +429,15 @@ RS.World = (function () {
       }
     }, 256, 512);
     winTex.wrapS = winTex.wrapT = THREE.RepeatWrapping;
-    const bMats = [0xffffff, 0xf2e8d5, 0xdfe6ea, 0xece3df].map(c => new THREE.MeshLambertMaterial({ map: winTex, color: c }));
+    const facade = (id, c) => new THREE.MeshStandardMaterial({ map: assetTex(id + '_diff', () => winTex), normalMap: assetTex(id + '_nor'), roughnessMap: assetTex(id + '_rough'), color: c, roughness: 1, metalness: 0.05 });
+    const bMats = [facade('facade006', 0xffffff), facade('facade006', 0xf3ead8), facade('facade006', 0xe4ebee), facade('facade002', 0xffffff)];
     const roofMat = new THREE.MeshLambertMaterial({ color: 0x8c8f93 });
     function buildingGeo(w, h, d) {
       const g = new THREE.BoxGeometry(w, h, d);
       const uv = g.attributes.uv;
       // 면 순서 +x, -x, +y, -y, +z, -z (각 4정점): 창 1칸 = 폭 3 m × 높이 2.9 m 가 되도록 UV 배율
-      const sc = [[d / 12, h / 23.2], [d / 12, h / 23.2], [0, 0], [0, 0], [w / 12, h / 23.2], [w / 12, h / 23.2]];
+      const TW = RS.ASSETS && RS.ASSETS.tex && RS.ASSETS.tex.facade006_diff ? 18 : 12, TH = RS.ASSETS && RS.ASSETS.tex && RS.ASSETS.tex.facade006_diff ? 24 : 23.2;
+      const sc = [[d / TW, h / TH], [d / TW, h / TH], [0, 0], [0, 0], [w / TW, h / TH], [w / TW, h / TH]];
       for (let f = 0; f < 6; f++) for (let v = 0; v < 4; v++) { const i = f * 4 + v; uv.setXY(i, uv.getX(i) * sc[f][0], uv.getY(i) * sc[f][1]); }
       g.clearGroups(); g.addGroup(0, 12, 0); g.addGroup(12, 6, 1); g.addGroup(18, 18, 0);
       return g;
@@ -387,6 +472,7 @@ RS.World = (function () {
           const h = floors * 2.9;
           const geo = buildingGeo(w, h, d);
           const m = new THREE.Mesh(geo, [bMats[Math.floor(rnd() * bMats.length)], roofMat]);
+          m.castShadow = true; m.receiveShadow = true;
           const f = frame(u, {});
           m.position.copy(point(u, side * dist + (side > 0 ? Math.max(0, o(u)) : Math.min(0, o(u))), h / 2 - 2.0));
           m.rotation.y = -f.th + (rnd() < 0.5 ? 0 : Math.PI / 2) + (rnd() - 0.5) * 0.3;
@@ -408,6 +494,13 @@ RS.World = (function () {
       for (let u = a + 10; u < b; u += 9 + rnd() * 10) {
         for (const side of [-1, 1]) if (rnd() < 0.7) trees.push({ u: u + rnd() * 5, l: side * (12 + rnd() * 9) + (side > 0 ? Math.max(0, o(u)) : Math.min(0, o(u))), h: 2.5 + rnd() * 0.5, ry: rnd() * 3 });
       }
+      const lampsS = [], shrubs = [], boxes = [];
+      for (let u = a + 20; u < b; u += 80) for (const side of [-1, 1]) lampsS.push({ u, l: side * 21.5 + (side > 0 ? Math.max(0, o(u)) : Math.min(0, o(u))), h: -1.9, ry: side > 0 ? Math.PI / 2 : -Math.PI / 2 });
+      for (let u = a + 15; u < b; u += 16 + rnd() * 14) { const side = rnd() < 0.5 ? -1 : 1; shrubs.push({ u, l: side * (8 + rnd() * 10) + (side > 0 ? Math.max(0, o(u)) : Math.min(0, o(u))), h: -1.1, ry: rnd() * 6, s: 0.7 + rnd() * 0.6 }); }
+      for (let u = a + 70; u < b; u += 160) boxes.push({ u, l: o(u) < 0 ? 3.3 : -3.3, h: -0.9, ry: o(u) < 0 ? -Math.PI / 2 : Math.PI / 2 });
+      if (Q > 0) placeModel('street_lamp_01', lampsS, { height: 7.5 });
+      if (Q > 0) placeModel('shrub_02', Q > 1 ? shrubs : shrubs.filter((x, i) => i % 2 === 0), { height: 1.6 });
+      placeModel('utility_box_02', boxes, { height: 1.2, shadow: true });
       const tg = new THREE.PlaneGeometry(4.5, 7);
       instances(tg, treeMat, trees);
       instances(tg, treeMat, trees.map(x => ({ ...x, ry: x.ry + Math.PI / 2 })));
@@ -433,7 +526,7 @@ RS.World = (function () {
         poles.push({ u, l: o > 0 ? -3.6 : 3.6, h: 3.4 }); poles.push({ u, l: o + (o > 0 ? 3.6 : -3.6), h: 3.4 });
         arms.push({ u, l: o / 2, h: 6.7 });
       }
-      instances(new THREE.BoxGeometry(0.32, 9, 0.32), M.pole, poles);
+      const pim = instances(new THREE.BoxGeometry(0.32, 9, 0.32), M.pole, poles); if (pim) pim.castShadow = true;
       instances(new THREE.BoxGeometry(12, 0.14, 0.14), M.pole, arms);
     }
 
@@ -562,6 +655,13 @@ RS.World = (function () {
         const next = C.stations[st.i + 1];
         plane(u, P(edge + 1.6), hp + 2.95, 2.4, 0.45, ledMat([`4  ${dirText}`, next ? `이번 열차  ${C.stations[C.endIdx].name} 행` : '이 열차는 종착역입니다']), 0);
       }
+      const fx = [], tc = [], cams = [];
+      for (let u = a + 18; u < b - 10; u += 38) fx.push({ u, l: P(edge + depth - 0.2), h: hp, ry: sd > 0 ? -Math.PI / 2 : Math.PI / 2 });
+      for (let u = a + 30; u < b - 10; u += 55) tc.push({ u, l: P(edge + depth - 0.45), h: hp, ry: 0 });
+      cams.push({ u: st.stop - 5, l: P(edge + 1.0), h: hp + 3.25, ry: Math.PI }, { u: st.pStart + 20, l: P(edge + 1.0), h: hp + 3.25, ry: Math.PI });
+      placeModel('korean_fire_extinguisher_01', fx, { height: 0.62, bake: !open, shadow: open });
+      placeModel('metal_trash_can', tc, { height: 0.95, bake: !open, shadow: open });
+      placeModel('security_camera_01', cams, { height: 0.3, bake: !open });
       const benches = [];
       for (let u = a + 12; u < b - 10; u += 15) benches.push({ u, l: P(edge + depth - 0.55), h: hp + 0.45 });
       instances(new THREE.BoxGeometry(0.5, 0.1, 1.8), benchMat, benches);

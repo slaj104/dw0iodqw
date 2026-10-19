@@ -15,16 +15,33 @@
     await Promise.all(list);
   })();
 
+  // ───── 3D 모델(glTF, Poly Haven CC0) 미리 불러오기 ─────
+  RS.MODELS = {};
+  const modelsReady = (async () => {
+    const M = RS.ASSETS && RS.ASSETS.models;
+    if (!M || !THREE.GLTFLoader) return;
+    const loader = new THREE.GLTFLoader();
+    await Promise.all(Object.keys(M).map(name => new Promise(res => {
+      try { loader.parse(M[name], '', g => { RS.MODELS[name] = g.scene; res(); }, () => res()); } catch (e) { res(); }
+    })));
+  })();
+
   // ───── three.js ─────
   const glCanvas = document.getElementById('gl');
   const renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+  renderer.shadowMap.enabled = true;                    // 지상 구간 햇빛 그림자
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.physicallyCorrectLights = false;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;   // 밝은 조명·하늘이 하얗게 날아가지 않도록 톤매핑
   renderer.toneMappingExposure = 1.0;
   const camera = new THREE.PerspectiveCamera(58, 1, 0.3, 1800);
   const ambient = new THREE.AmbientLight(0xffffff, 0.35);
   const hemi = new THREE.HemisphereLight(0xdfe9ff, 0x3a342c, 0.2);
   const sun = new THREE.DirectionalLight(0xfff4e0, 0);
+  sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, { left: -110, right: 110, top: 110, bottom: -110, near: 1, far: 700 });
+  sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.04;
   const head = new THREE.SpotLight(0xfff6e0, 1.6, 280, 0.42, 0.5, 1.2);
   const SKY = new THREE.Color(0xa8c8e8), DARK = new THREE.Color(0x07080a);
   let world = null, sim = null, scene = new THREE.Scene();
@@ -45,7 +62,13 @@
     if (world) world.dispose();
     if (typeof opp !== 'undefined') { opp.u = null; opp.next = new URLSearchParams(location.search).has('opp') ? 0.5 : 40; }
     sim = new RS.Sim(o);
-    world = RS.World.build(sim.c);
+    const Q = Number(document.getElementById('optQ').value);
+    world = RS.World.build(sim.c, Q);
+    renderer.setPixelRatio(Q === 2 ? Math.min(window.devicePixelRatio || 1, 1.5) : Q === 1 ? 1 : 0.75);
+    renderer.shadowMap.enabled = Q > 0;
+    sun.shadow.mapSize.set(Q === 2 ? 2048 : 1024, Q === 2 ? 2048 : 1024);
+    if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
+    onResize();
 
     scene = world.scene;
     scene.add(ambient, hemi, sun, sun.target, head, head.target);
@@ -134,7 +157,9 @@
     // 터널 안 밝기는 정점 색(조명 베이킹)이 담당 → 주변광은 일정, 지상은 태양광·하늘광
     ambient.intensity = 0.85 - 0.4 * out;
     hemi.intensity = 0.05 + 0.6 * out;
-    sun.intensity = 0.85 * out; sun.position.copy(camera.position).add(new THREE.Vector3(200, 300, 100)); sun.target.position.copy(camera.position);
+    sun.intensity = 1.1 * out; sun.castShadow = out > 0.05;
+    const fwd = world.point(u + 70, 0, 0, new THREE.Vector3());
+    sun.target.position.copy(fwd); sun.position.copy(fwd).add(new THREE.Vector3(160, 260, 90)); sun.target.updateMatrixWorld();
     head.intensity = 1.3 * (1 - out * 0.8);
     scene.background.copy(DARK).lerp(SKY, out);
     scene.fog.color.copy(DARK).lerp(SKY, out);
@@ -298,7 +323,7 @@
   function showMenu() { running = false; RS.Audio.stopAnn(); menu.classList.remove('hidden'); result.classList.add('hidden'); }
   document.getElementById('startBtn').addEventListener('click', async () => {
     RS.Audio.init();
-    await fontReady;
+    await fontReady; await modelsReady;
     let a = Number(selS.value), b = Number(selE.value);
     if (b <= a) b = a + 1;
     opts.guide = document.getElementById('optGuide').checked;

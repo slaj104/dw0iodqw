@@ -146,12 +146,12 @@ RS.Audio = (function () {
     while (annQueue.length) {
       const lines = annQueue.shift();
       chime();
-      await new Promise(r => setTimeout(r, 1300));
+      await new Promise(r => setTimeout(r, 1000));
       for (const l of lines) {
         if (!annOn || muted) break;
         const b = l.key ? await voice(l.key) : null;
         if (b) await playBuf(b); else await speakTTS(l);
-        await new Promise(r => setTimeout(r, 250));
+        await new Promise(r => setTimeout(r, 150));
       }
     }
     annBusy = false;

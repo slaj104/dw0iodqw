@@ -83,7 +83,7 @@ def main():
             y = pa_effect(x, sr)
             fx = os.path.join(TMP, 'v_fx.wav')
             wavfile.write(fx, sr, y)
-            subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', fx, '-ac', '1', '-ar', '24000', '-b:a', '40k', dst], check=True)
+            subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', fx, '-filter:a', 'atempo=1.15', '-ac', '1', '-ar', '24000', '-b:a', '40k', dst], check=True)  # 실제 방송 속도에 맞춰 1.15배
             print(key, text)
 
 if __name__ == '__main__':

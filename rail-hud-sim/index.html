@@ -20,6 +20,9 @@
       <select id="dir"><option value="down">하선 (남태령 → 산본)</option><option value="up">상선 (산본 → 남태령)</option></select>
     </label>
     <label>승차율 <input id="optLoad" type="range" min="0" max="100" value="40"></label>
+    <label>그래픽 품질
+      <select id="optQ"><option value="2">높음 (그림자·고해상도, 외장 그래픽)</option><option value="1" selected>보통 (권장)</option><option value="0">낮음 (노트북·내장 그래픽)</option></select>
+    </label>
     <label>출발역 <select id="startSt"></select></label>
     <label>도착역 <select id="endSt"></select></label>
     <label class="chk"><input id="optGuide" type="checkbox" checked> HUD 운전 가이드 (기본 운전 취급 + 실시간 보정)</label>
@@ -50,7 +53,10 @@
 </div>
 
 <script src="vendor/three.min.js"></script>
+<script src="vendor/GLTFLoader.js"></script>
 <script src="js/assets_bundle.js"></script>
+<script src="js/assets_voice.js"></script>
+<script src="js/assets_models.js"></script>
 <script src="js/ref_data.js"></script>
 <script src="js/route.js"></script>
 <script src="js/physics.js"></script>
