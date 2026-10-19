@@ -221,6 +221,20 @@ RS.HUD = (function () {
     txt(g, d.brake === 8 ? 'EB' : `B${d.brake}`, ws.cx + 440 * S, baseY + 76 * S, 22 * S, d.brake === 8 ? RED : d.brake > 0 ? AMBER : DIM, 'right', MONO, 800);
     if (d.doors) txt(g, '출입문 열림', ws.cx + 440 * S, baseY + 100 * S, 13 * S, AMBER, 'right');
 
+    // 안내방송 자막
+    if (d.caption) {
+      g.save(); g.shadowBlur = 0;
+      g.font = `600 ${14 * S}px ${FONT}`;
+      let s = d.caption;
+      const maxW = ws.w * 0.38, ccx = ws.cx + 70 * S;
+      const lines = [];
+      while (s.length) { let n = s.length; while (g.measureText(s.slice(0, n)).width > maxW && n > 5) n--; lines.push(s.slice(0, n)); s = s.slice(n).trimStart(); if (lines.length > 2) break; }
+      const ch = (lines.length * 20 + 14) * S, cw = maxW + 50 * S, cx = ccx - cw / 2, cy = ws.bot - ch - 12 * S;
+      rr(g, cx, cy, cw, ch, 8 * S); g.fillStyle = 'rgba(0,0,0,0.45)'; g.fill(); g.restore();
+      txt(g, '안내방송', cx + 10 * S, cy + 16 * S, 11 * S, CYAN, 'left', FONT, 800);
+      lines.forEach((l, i) => txt(g, l, ccx + 20 * S, cy + (17 + i * 20) * S, 14 * S, WHITE, 'center', FONT, 600));
+    }
+
     let bannerY = ws.top + ws.h * 0.53;
     const banner = (text, col, sub) => {
       g.save(); g.shadowBlur = 0; g.fillStyle = 'rgba(0,0,0,0.3)'; rr(g, ws.cx - 260 * S, bannerY - 20 * S, 520 * S, sub ? 60 * S : 40 * S, 10); g.fill();

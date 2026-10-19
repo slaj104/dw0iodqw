@@ -26,7 +26,7 @@
   const head = new THREE.SpotLight(0xfff6e0, 1.6, 280, 0.42, 0.5, 1.2);
   const SKY = new THREE.Color(0xa8c8e8), DARK = new THREE.Color(0x07080a);
   let world = null, sim = null, scene = new THREE.Scene();
-  const opts = { hud: true, guide: true };
+  const opts = { hud: true, guide: true, ann: true };
 
   RS.HUD.init(document.getElementById('cab'), document.getElementById('hud'), document.getElementById('dash'));
   function onResize() {
@@ -89,6 +89,7 @@
     else if (K === 'g') { opts.guide = !opts.guide; sim.flash(opts.guide ? 'HUD 운전 가이드 켬' : 'HUD 운전 가이드 끔 (비교 시연)', null, 2); }
     else if (K === 'u') { opts.hud = !opts.hud; }
     else if (K === 'm') sim.flash(RS.Audio.toggleMute() ? '소리 끔' : '소리 켬', null, 1.5);
+    else if (K === 'v') { opts.ann = RS.Audio.toggleAnn(); sim.flash(opts.ann ? '안내방송 켬' : '안내방송 끔', null, 1.5); }
     else if (k === 'Escape') showMenu();
     else used = false;
     if (used) e.preventDefault();
@@ -148,6 +149,8 @@
     if (sim.finished && running) { running = false; setTimeout(showResult, 1200); }
   }
 
+  let caption = null;
+
   // 승강장 모니터(정위치 표시) · 진로 개통 표시기
   let devT = 0;
   function posState() {
@@ -170,6 +173,12 @@
 
   function handleEvents() {
     for (const e of sim.events) {
+      if (e && e.type === 'ann') {
+        if (opts.ann) RS.Audio.announce(e.lines);
+        const ko = e.lines.filter(l => l.ko).map(l => l.ko).join(' ');
+        caption = { text: ko, t: performance.now() + Math.max(4000, ko.length * 170) };
+        continue;
+      }
       if (e === 'notch') RS.Audio.notch();
       else if (e === 'atc_down' || e === 'atc_up') RS.Audio.codeChange();
       else if (e === 'doorOpen') RS.Audio.doorOpen();
@@ -211,7 +220,7 @@
       grade: c.gradeAt(sim.u), clock: fmtClock(sim.t), runTime: fmtRun(sim.t), doors: sim.doors,
       msg: sim.msgs[sim.msgs.length - 1] || null, sched,
       leaderDist: sim.leader.enabled && sim.leader.rear - sim.u > 0 && sim.leader.rear - sim.u < 3000 ? sim.leader.rear - sim.u : null,
-      refV, sCam, pos: posState(),
+      refV, sCam, pos: posState(), caption: caption && performance.now() < caption.t ? caption.text : null,
       ar: {
         stopMark: B && B.stop - sCam < 900 && B.stop - sCam > 3 ? B.stop : null,
         brakePoint: opts.guide && a.brakePointU != null && !stopBraking && a.brakePointU - sCam > 3 && a.brakePointU - sCam < 900 ? a.brakePointU : null,
@@ -247,13 +256,15 @@
   selD.addEventListener('change', fillStations);
   fillStations();
 
-  function showMenu() { running = false; menu.classList.remove('hidden'); result.classList.add('hidden'); }
+  function showMenu() { running = false; RS.Audio.stopAnn(); menu.classList.remove('hidden'); result.classList.add('hidden'); }
   document.getElementById('startBtn').addEventListener('click', async () => {
     RS.Audio.init();
     await fontReady;
     let a = Number(selS.value), b = Number(selE.value);
     if (b <= a) b = a + 1;
     opts.guide = document.getElementById('optGuide').checked;
+    opts.ann = document.getElementById('optAnn').checked;
+    RS.Audio.stopAnn();
     startGame({
       dir: selD.value, startIdx: a, endIdx: b,
       leader: document.getElementById('optLeader').checked,

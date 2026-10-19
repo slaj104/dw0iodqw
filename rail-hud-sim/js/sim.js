@@ -31,6 +31,7 @@ RS.Sim = (function () {
       this.departT = null; this.arrivals = [];
       this.trail = [];
       this.depU = A.stop;
+      this.ann = {};                 // 안내방송 진행 상태 (역간마다 초기화)
       this.lastV = 0; this.accel = 0;
     }
 
@@ -95,10 +96,11 @@ RS.Sim = (function () {
       if (this.doors) {
         if (this.dwell < 8) { this.flash('승객 승하차 중…', '#ffc04d', 1.5); return; }
         this.doors = false; this.veh.doors = false; this.events.push('doorClose');
+        this.announce('close', [{ ko: '출입문 닫습니다.' }]);
         this.pushCall('출입문 닫힘'); this.pushCall('안전문 닫힘');
         this.served = false;
         if (B && B.i === this.c.endIdx) { this.finish(); return; }
-        this.guide.onServed();
+        this.guide.onServed(); this.ann = {};
         this.depU = this.u;
         this.flash('출입문 닫힘 — 발차', null, 2);
         return;
@@ -184,6 +186,7 @@ RS.Sim = (function () {
         if (this.auto) this.autoDrive(0.1);
         this.updateCalls();
         this.checkScore();
+        this.updateAnnounce();
       }
 
       // 정차역 통과(과주) 판정
@@ -192,9 +195,45 @@ RS.Sim = (function () {
         this.score.stops.push({ name: B.name, err: this.u - B.stop, grade: '실패', t: this.t });
         this.flash(`${B.name} 정차 실패 (과주)`, '#ff5050', 3);
         if (B.i === c.endIdx) { this.finish(); return; }
-        this.guide.onServed();
+        this.guide.onServed(); this.ann = {};
       }
       if (this.u > c.uMax - 50) this.finish();
+    }
+
+    // ───── 안내방송 (TTS) ─────
+    announce(key, lines) {
+      if (this.ann[key]) return;
+      this.ann[key] = true;
+      this.events.push({ type: 'ann', lines });
+    }
+    updateAnnounce() {
+      const c = this.c, B = this.nextStation, u = this.u, vK = this.vK;
+      if (!B || this.doors) return;
+      const door = B.side === 'L' ? '왼쪽' : '오른쪽', doorEn = B.side === 'L' ? 'left' : 'right';
+      const last = B.i === c.endIdx;
+      const xfer = B.name === '금정' ? '1호선으로 갈아타실 고객께서는 이번 역에서 내리시기 바랍니다.' : '';
+      const xferEn = B.name === '금정' ? ' You can transfer to Line 1.' : '';
+      // 출발 직후: 이번 역 안내
+      if (!this.ann.depart && vK > 8 && B.stop - u > 300) {
+        const first = !this.ann.first;
+        this.ann.first = true;
+        const lines = [];
+        if (first && this.guide.seg === c.startIdx) lines.push({ ko: `이 열차는 ${c.stations[c.endIdx].name}까지 가는 열차입니다.` });
+        if (last) lines.push({ ko: `이번 역은 이 열차의 종착역인 ${B.name}, ${B.name}역입니다. 내리실 문은 ${door}입니다. 두고 내리시는 물건이 없는지 다시 한 번 확인하시기 바랍니다.` },
+          { en: `This is the last stop, ${B.en}. The doors are on your ${doorEn}.`, lang: 'en-US' });
+        else lines.push({ ko: `이번 역은 ${B.name}, ${B.name}역입니다. 내리실 문은 ${door}입니다. ${xfer}` },
+          { en: `The next station is ${B.en}. The doors are on your ${doorEn}.${xferEn}`, lang: 'en-US' });
+        this.announce('depart', lines);
+      }
+      // 교직 절연구간 통과 안내
+      const D = c.dead;
+      if (u > D.start - 700 && u < D.start - 100 && vK > 5) {
+        this.announce('dead', [{ ko: '잠시 후 전기 공급 방식이 바뀌는 구간을 지나갑니다. 객실 냉난방과 일부 조명이 잠시 꺼질 수 있으니 양해 바랍니다.' }]);
+      }
+      // 도착 직전
+      if (B.stop - u < 260 && B.stop - u > 30 && vK > 5) {
+        this.announce('arrive', [{ ko: `${B.name}, ${B.name}역입니다. 내리실 문은 ${door}입니다.` }, { en: `This stop is ${B.en}.`, lang: 'en-US' }]);
+      }
     }
 
     view(dt) {

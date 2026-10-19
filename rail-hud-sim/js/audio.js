@@ -100,8 +100,35 @@ RS.Audio = (function () {
     alarm.ag.gain.setTargetAtTime(on ? 0.05 : 0, t, 0.01);
   }
 
+  // 안내방송: 브라우저 내장 음성합성(Web Speech API). 한국어 음성이 없으면 기본 음성으로 읽음
+  let annOn = true, voices = [];
+  const synth = window.speechSynthesis;
+  const loadVoices = () => { if (synth) voices = synth.getVoices(); };
+  if (synth) { loadVoices(); synth.onvoiceschanged = loadVoices; }
+  function pickVoice(lang) {
+    const v = voices.filter(x => x.lang && x.lang.replace('_', '-').toLowerCase().startsWith(lang.slice(0, 2).toLowerCase()));
+    return v.find(x => /female|여|heami|yuna|sunhi|google/i.test(x.name)) || v[0] || null;
+  }
+  function announce(lines) {
+    if (!synth || !annOn || muted) return;
+    beep([1047, 880, 784, 880], 0.35, 0.04);           // 안내 차임
+    setTimeout(() => {
+      lines.forEach(l => {
+        const text = l.ko || l.en;
+        if (!text) return;
+        const ut = new SpeechSynthesisUtterance(text);
+        ut.lang = l.lang || 'ko-KR';
+        const v = pickVoice(ut.lang); if (v) ut.voice = v;
+        ut.rate = ut.lang === 'ko-KR' ? 1.05 : 1.0; ut.pitch = 1.05; ut.volume = 0.9;
+        synth.speak(ut);
+      });
+    }, 900);
+  }
+
   return {
-    init, update, play,
+    init, update, play, announce,
+    toggleAnn: () => { annOn = !annOn; if (!annOn && synth) synth.cancel(); return annOn; },
+    stopAnn: () => { if (synth) synth.cancel(); },
     codeChange: () => beep([1320], 0.35, 0.12),
     // 출입문: 작은 차임 + 약한 공기음 (녹음 대신 부드러운 합성음)
     doorOpen: () => { beep([659, 880], 0.45, 0.035); play('air_release', 0.1, 0.85); },
@@ -109,6 +136,6 @@ RS.Audio = (function () {
     buzzer: () => beep([1500, 1500], 0.12, 0.04),
     notch: () => beep([2600], 0.04, 0.05),
     call: () => beep([880, 1320], 0.2, 0.08),
-    toggleMute: () => { muted = !muted; return muted; },
+    toggleMute: () => { muted = !muted; if (muted && synth) synth.cancel(); return muted; },
   };
 })();

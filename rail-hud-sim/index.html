@@ -24,6 +24,7 @@
     <label>도착역 <select id="endSt"></select></label>
     <label class="chk"><input id="optGuide" type="checkbox" checked> HUD 운전 가이드 (기본 운전 취급 + 실시간 보정)</label>
     <label class="chk"><input id="optAuto" type="checkbox"> 자동운전으로 시작 (P 키로 언제든 켜고 끔)</label>
+    <label class="chk"><input id="optAnn" type="checkbox" checked> 안내방송 (TTS 음성 + 자막, V 키로 켜고 끔)</label>
     <label class="chk"><input id="optLeader" type="checkbox"> 선행열차 운행 (ADU 40모드·STOP 발생 — 교재 5.6)</label>
   </div>
   <table class="keys">
@@ -35,7 +36,7 @@
     <tr><td>F</td><td>지적 확인 환호 (HUD에 ☞ 표시가 뜨면)</td></tr>
     <tr><td>H · B</td><td>기적 · 발차 버저</td></tr>
     <tr><td>P · G · U</td><td>자동운전 · 가이드 표시 · HUD 전체 켜기/끄기</td></tr>
-    <tr><td>M · Esc</td><td>소리 · 메뉴</td></tr>
+    <tr><td>V · M · Esc</td><td>안내방송 · 소리 · 메뉴</td></tr>
   </table>
   <button id="startBtn">운행 시작</button>
   <p class="small">취급 기준: 제2종 철도차량운전면허 표준교재 「기능교재」 4장(기본 운전 취급법), 1.2(기본 운전 취급), 5.6(ADU 40모드), 8장(속도 제한).
