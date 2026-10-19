@@ -1,7 +1,8 @@
 // 효과음: BigSoundBank(CC0) 실제 녹음 + Web Audio 합성(VVVF 인버터음, ATC 경보)
 //  rolling_interior : 파리 지하철 차내 주행음 → 속도에 따라 재생속도·음량 변화
 //  tunnel_rumble    : 터널 주행 굉음 (지하 구간)
-//  compressor       : 공기압축기(CM) 구동음, door_close/door_chime/air_release/horn
+//  compressor       : 공기압축기(CM) 구동음, air_release(공기 배출), horn(기적)
+//  출입문 차임은 너무 크지 않도록 합성음 사용
 window.RS = window.RS || {};
 
 RS.Audio = (function () {
@@ -53,7 +54,7 @@ RS.Audio = (function () {
     ao.connect(ag); ag.connect(master); ao.start();
     alarm = { ao, ag };
 
-    ['rolling_interior', 'tunnel_rumble', 'compressor', 'door_close', 'door_chime', 'air_release', 'horn'].forEach(async n => {
+    ['rolling_interior', 'tunnel_rumble', 'compressor', 'air_release', 'horn'].forEach(async n => {
       buf[n] = await decode(n);
       if (['rolling_interior', 'tunnel_rumble', 'compressor'].includes(n) && buf[n]) loops[n] = loop(n);
     });
@@ -102,6 +103,10 @@ RS.Audio = (function () {
   return {
     init, update, play,
     codeChange: () => beep([1320], 0.35, 0.12),
+    // 출입문: 작은 차임 + 약한 공기음 (녹음 대신 부드러운 합성음)
+    doorOpen: () => { beep([659, 880], 0.45, 0.035); play('air_release', 0.1, 0.85); },
+    doorClose: () => { beep([880, 740, 659], 0.4, 0.035); setTimeout(() => play('air_release', 0.07, 0.7), 1500); },
+    buzzer: () => beep([1500, 1500], 0.12, 0.04),
     notch: () => beep([2600], 0.04, 0.05),
     call: () => beep([880, 1320], 0.2, 0.08),
     toggleMute: () => { muted = !muted; return muted; },

@@ -48,7 +48,7 @@
     scene.fog = new THREE.Fog(0x07080a, 40, 420);
     scene.background = DARK.clone();
     const A = sim.c.stations[sim.c.startIdx];
-    sim.flash(`${A.name} 출발 — ${sim.c.name}`, null, 4, opts.guide ? 'HUD 운전 가이드: 교재 4장 기본 운전 취급 기준' : '');
+    sim.flash(`${A.name} 출발 — ${sim.c.name}`, null, 4);
     const q = new URLSearchParams(location.search);
     if (q.has('u')) { // 시연용: ?u=거리(m)&v=속도
       sim.st.s = Number(q.get('u')); sim.st.v = Number(q.get('v') || 0) / KMH; sim.veh.brake = 0;
@@ -141,24 +141,45 @@
     updateCamera();
     const ld = sim.leader.enabled ? sim.leader.rear - sim.u : null;
     world.leader.update(sim.leader.s, sim.leader.enabled && ld < 1500 && ld > -50);
+    updateStationDevices(dt);
     renderer.render(scene, camera);
     drawHUD();
     RS.Audio.update(dt, { vK: sim.vK, tAct: sim.st.tAct, bAct: sim.st.bAct, tunnel: world.inTunnel(sim.u), cm: sim.veh.cm, regen: !sim.veh.regenCut, alarm: sim.atc.warn || sim.atc.braking });
     if (sim.finished && running) { running = false; setTimeout(showResult, 1200); }
   }
 
+  // 승강장 모니터(정위치 표시) · 진로 개통 표시기
+  let devT = 0;
+  function posState() {
+    const B = sim.nextStation;
+    if (!B || B.stop - sim.u > 300) return null;
+    return { st: B, err: sim.u - B.stop, stopped: sim.st.v < 0.05, doors: sim.doors };
+  }
+  function updateStationDevices(dt) {
+    const p = posState();
+    if (p && world.monitors[p.st.i]) world.monitors[p.st.i].update(p);
+    devT -= dt;
+    if (devT > 0) return;
+    devT = 0.5;
+    const c = sim.c;
+    for (const r of world.routeInd) {
+      const bi = c.blockIndexAt(r.u + 10);
+      r.set(!(sim.codes && sim.codes[bi] === 0));
+    }
+  }
+
   function handleEvents() {
     for (const e of sim.events) {
       if (e === 'notch') RS.Audio.notch();
       else if (e === 'atc_down' || e === 'atc_up') RS.Audio.codeChange();
-      else if (e === 'doorOpen') { RS.Audio.play('air_release', 0.6); RS.Audio.play('door_chime', 0.5); }
-      else if (e === 'doorClose') RS.Audio.play('door_close', 0.7);
-      else if (e === 'horn') RS.Audio.play('horn', 0.8);
-      else if (e === 'buzzer') RS.Audio.play('door_chime', 0.4, 1.4);
+      else if (e === 'doorOpen') RS.Audio.doorOpen();
+      else if (e === 'doorClose') RS.Audio.doorClose();
+      else if (e === 'horn') RS.Audio.play('horn', 0.7);
+      else if (e === 'buzzer') RS.Audio.buzzer();
       else if (e === 'call' || e === 'switch') RS.Audio.call();
     }
     sim.events.length = 0;
-    if (sim.veh.brake < (sim._lastB || 0) && sim.veh.brake === 0 && sim.vK < 3) RS.Audio.play('air_release', 0.35);
+    if (sim.veh.brake < (sim._lastB || 0) && sim.veh.brake === 0 && sim.vK < 3) RS.Audio.play('air_release', 0.15);
     sim._lastB = sim.veh.brake;
   }
 
@@ -190,7 +211,7 @@
       grade: c.gradeAt(sim.u), clock: fmtClock(sim.t), runTime: fmtRun(sim.t), doors: sim.doors,
       msg: sim.msgs[sim.msgs.length - 1] || null, sched,
       leaderDist: sim.leader.enabled && sim.leader.rear - sim.u > 0 && sim.leader.rear - sim.u < 3000 ? sim.leader.rear - sim.u : null,
-      refV, sCam,
+      refV, sCam, pos: posState(),
       ar: {
         stopMark: B && B.stop - sCam < 900 && B.stop - sCam > 3 ? B.stop : null,
         brakePoint: opts.guide && a.brakePointU != null && !stopBraking && a.brakePointU - sCam > 3 && a.brakePointU - sCam < 900 ? a.brakePointU : null,

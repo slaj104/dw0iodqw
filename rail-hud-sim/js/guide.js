@@ -131,7 +131,7 @@ RS.Guide = (function () {
         else if (n > cur) o = { main: `추가 제동 ${n}단`, sub: errCur !== null ? `현재 ${cur}단 유지 시 정지위치 +${errCur.toFixed(1)} m 과주` : '정지위치 맞춤', brake: n, tag: n > 4 ? '보정' : '교재' };
         else if (n < cur) o = { main: `${n}단으로 계단 완해`, sub: errCur !== null ? `${cur}단 유지 시 ${(-errCur).toFixed(1)} m 미달` : '', brake: n, tag: '교재' };
         else o = { main: `제동 ${n}단 유지`, sub: errCur !== null ? `예상 정지 ${errCur >= 0 ? '+' : ''}${errCur.toFixed(2)} m` : '', brake: n, tag: '교재' };
-        if (n > 4 && o.tag === '보정' && !o.reason) o.reason = '진입 속도 과다 → 교재(4단)보다 강한 제동 필요';
+        if (n > 4 && o.tag === '보정' && !o.reason) o.reason = '진입 속도 과다 → 기준(4단)보다 강한 제동 필요';
         put(80, o);
       }
 
@@ -175,7 +175,7 @@ RS.Guide = (function () {
           if (vK >= it.onV - 0.3) {
             const n = Pr.minNotchFor(st, { u: it.to, v: it.offV / KMH }, env, it.notch);
             const late = vK > it.onV + 2;
-            this.active = { notch: Math.min(7, n), releaseV: it.offV, why: `교재 ${it.onV}→${it.offV}`, tag: n > it.notch || late ? '보정' : '교재', key,
+            this.active = { notch: Math.min(7, n), releaseV: it.offV, why: `기준 ${it.onV}→${it.offV}`, tag: n > it.notch || late ? '보정' : '교재', key,
               reason: n > it.notch ? `기준 ${it.onV} km/h 초과(+${(vK - it.onV).toFixed(0)}) · 구간 끝까지 ${Math.round(it.to - u)} m → ${n}단 필요` : '' };
             this.done[key] = true;
           }
@@ -241,7 +241,7 @@ RS.Guide = (function () {
           } else {
             const tag = offWhy ? '보정' : '교재';
             put(30, { main: '동력 4단', sub: btWait ? `약 ${Math.round(target)} km/h에서 OFF → 제동감도시험` : `약 ${Math.round(target)} km/h에서 동력 OFF`, power: 4, tag,
-              reason: offWhy ? `교재 ${seg.offV} km/h → ${offWhy} 때문에 ${Math.round(target)} km/h` : '' });
+              reason: offWhy ? `기준 ${seg.offV} km/h → ${offWhy} 때문에 ${Math.round(target)} km/h` : '' });
           }
         }
         if (this.phase === 'coast' && x.power > 0 && !this.powerTo) {
@@ -257,7 +257,7 @@ RS.Guide = (function () {
           if (this.done[key] || u < it.from || u > it.to) return;
           if (vK <= it.onV + 0.3 || it.measure) {
             const offV = Math.min(it.offV, vCeil - 2);
-            this.powerTo = { offV, why: it.measure ? '15량 측정표 통과' : `교재 ${it.onV}→${it.offV}`, tag: '교재', key };
+            this.powerTo = { offV, why: it.measure ? '15량 측정표 통과' : `기준 ${it.onV}→${it.offV}`, tag: '교재', key };
             this.done[key] = true;
           }
         });

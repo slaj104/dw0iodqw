@@ -23,12 +23,10 @@
 | rolling_interior.mp3 | #3042 Recent metro, interior | 차내 주행음 (속도에 따라 재생속도 변경) |
 | tunnel_rumble.mp3 | #0636 Eurostar car in a tunnel | 터널 주행음 |
 | compressor.mp3 | #1487 Air compressor | 공기압축기(CM) |
-| door_close.mp3 | #3343 Train door beeps | 출입문 닫힘 |
-| door_chime.mp3 | #2967 Subway door bell #2 | 출입문 차임 / 버저 |
 | air_release.mp3 | #1490 Pneumatic brake released | 공기 배출음 |
 | horn.mp3 | #2846 Train Horn #2 | 기적 |
 
-VVVF 인버터음·ATC 경보음은 Web Audio로 합성 (파일 없음).
+VVVF 인버터음·ATC 경보음·출입문 차임·발차 버저는 Web Audio로 합성 (파일 없음).
 
 ## 폰트 — Noto Sans KR (SIL Open Font License 1.1)
 `assets/font/OFL.txt` 참고. @fontsource/noto-sans-kr 5.0.19 의 woff2 사용.

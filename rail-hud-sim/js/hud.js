@@ -116,7 +116,7 @@ RS.HUD = (function () {
       const tc = TAGCOL[a.tag] || COL;
       g.save(); g.shadowBlur = 0; rr(g, bx, by, bw, bh, 12 * S); g.fillStyle = 'rgba(0,20,12,0.28)'; g.fill();
       g.strokeStyle = tc; g.lineWidth = a.tag === '보정' ? 2.5 : 1.5; g.stroke(); g.restore();
-      chip(g, bx + 12 * S, by + 20 * S, a.tag === '교재' ? '교재 4장' : a.tag, tc, true, S);
+      if (a.tag !== '교재') chip(g, bx + 12 * S, by + 20 * S, a.tag, tc, true, S);
       txt(g, a.main, bx + 14 * S, by + 52 * S, 28 * S, a.tag === '보정' && blink ? AMBER : WHITE, 'left', FONT, 800);
       txt(g, a.sub || '', bx + 14 * S, by + 80 * S, 15 * S, tc, 'left', FONT, 600);
       if (a.reason) txt(g, '↳ ' + a.reason, bx + 14 * S, by + bh + 52 * S, 13 * S, AMBER, 'left', FONT, 700);
@@ -141,6 +141,25 @@ RS.HUD = (function () {
         txt(g, s, lx - 70 * S, yy, 13.5 * S, it.kind === 'call' ? CYAN : it.kind === 'stop' ? WHITE : COL, 'right', FONT, 600);
         txt(g, fmtD(it.dist), lx, yy, 13 * S, DIM, 'right', MONO, 700);
       });
+    }
+
+    // ── 정위치 표시 (승강장 모니터와 같은 값)
+    if (d.pos) {
+      const e = d.pos.err, px = ws.tl + 30 * S, py = ws.top + ws.h * 0.40, pw = 210 * S, ph = 116 * S;
+      let st = '접근', col = DIM;
+      if (Math.abs(e) <= 0.5) { st = '양호'; col = COL; } else if (e > 0) { st = '초과'; col = RED; } else if (e > -10 || d.pos.stopped) { st = '미달'; col = AMBER; }
+      const val = Math.abs(e) < 10 ? `${e >= 0 ? '+' : '-'}${String(Math.abs(Math.round(e * 1000))).padStart(3, '0')} mm` : `${e >= 0 ? '+' : '-'}${Math.abs(e).toFixed(1)} m`;
+      g.save(); g.shadowBlur = 0; rr(g, px, py, pw, ph, 10 * S); g.fillStyle = 'rgba(0,20,12,0.3)'; g.fill(); g.strokeStyle = col; g.lineWidth = 1.5; g.stroke(); g.restore();
+      txt(g, `${d.pos.st.name} 정위치`, px + 12 * S, py + 18 * S, 13 * S, DIM, 'left', FONT, 700);
+      txt(g, '정지위치까지', px + pw - 12 * S, py + 18 * S, 11 * S, DIM, 'right', FONT, 600);
+      txt(g, st, px + 12 * S, py + 56 * S, 30 * S, col, 'left', FONT, 900);
+      txt(g, val, px + pw - 12 * S, py + 58 * S, 24 * S, col, 'right', MONO, 800);
+      const by = py + 90 * S, bw = pw - 24 * S, bx = px + 12 * S;
+      g.strokeStyle = DIM; g.lineWidth = 1; g.strokeRect(bx, by, bw, 8 * S);
+      g.fillStyle = 'rgba(114,255,176,0.35)'; g.fillRect(bx + bw / 2 - bw * 0.05, by, bw * 0.1, 8 * S);
+      const mx = bx + bw / 2 + Math.max(-1, Math.min(1, e / 5)) * bw / 2;
+      g.fillStyle = col; g.beginPath(); g.arc(mx, by + 4 * S, 6 * S, 0, 7); g.fill();
+      txt(g, '-5 m', bx, by + 18 * S, 9 * S, DIM, 'left', MONO); txt(g, '+5 m', bx + bw, by + 18 * S, 9 * S, DIM, 'right', MONO);
     }
 
     // ── 하단 클러스터
@@ -309,9 +328,9 @@ RS.HUD = (function () {
     txt(g, '운전곡선', x + 10, y + 12, 12, '#7fb8ff', 'left', FONT, 800);
     if (c.note) {
       g.font = `500 11px ${FONT}`;
-      let s = '교재: ' + c.note;
+      let s = '구간: ' + c.note;
       while (g.measureText(s).width > w - 90 && s.length > 10) s = s.slice(0, -2);
-      if (s.length < ('교재: ' + c.note).length) s += '…';
+      if (s.length < ('구간: ' + c.note).length) s += '…';
       txt(g, s, x + 70, y + 12, 11, '#9aa5b1', 'left', FONT, 500);
     }
     g.strokeStyle = '#1a2229'; g.lineWidth = 1;

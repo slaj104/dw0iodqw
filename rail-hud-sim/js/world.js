@@ -288,6 +288,7 @@ RS.World = (function () {
     }
 
     // ───── 역사 ─────
+    const monitors = [], routeInd = [];
     for (const st of C.stations) {
       const sd = st.side === 'R' ? 1 : -1;
       const a = st.pStart, b = st.pEnd;
@@ -336,6 +337,90 @@ RS.World = (function () {
         g.fillText('10', w / 2, h / 2 + 8);
       }, 256, 256);
       plane(st.stop, P(edge + 0.8), hp + 2.9, 0.7, 0.7, new THREE.MeshBasicMaterial({ map: stopTex }), 0);
+
+      // 승무원용 모니터 (CCTV + 승강장 안전문 정위치 표시: 미달/양호/초과, ±mm)
+      {
+        const mu = st.stop + 14, ml = P(edge + 1.1), mh = 3.55, toe = -sd * 0.28;
+        const f = frame(mu, {});
+        const grp = new THREE.Group();
+        grp.position.copy(point(mu, ml, mh)); grp.rotation.y = -f.th + toe;
+        const box = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.78, 0.14), M.sigHead); grp.add(box);
+        const cv = document.createElement('canvas'); cv.width = 640; cv.height = 256;
+        const tex = new THREE.CanvasTexture(cv); tex.anisotropy = 4;
+        const scr = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.7), new THREE.MeshBasicMaterial({ map: tex })); scr.position.z = 0.075; grp.add(scr);
+        const hang = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.6, 0.06), M.pole); hang.position.y = 1.1; grp.add(hang);
+        scene.add(grp);
+        const mon = { st, cv, tex, last: '' };
+        mon.update = (state) => drawMonitor(mon, state);
+        drawMonitor(mon, { err: null });
+        monitors[st.i] = mon;
+      }
+      // 신호기: ATC 구간 = 진로 개통 표시기 (ATS 구간 출발신호기는 아래 상치신호기에서 설치)
+      {
+        const su = st.stop + 28, sl = P(2.35), f = frame(su, {});
+        if (st.i < C.stations.length - 1 && !C.isATS(su + 10)) {
+          const grp = new THREE.Group();
+          grp.position.copy(point(su, sl, 3.4)); grp.rotation.y = -f.th;
+          grp.add(new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.5, 0.2), M.sigHead));
+          const on = new THREE.MeshBasicMaterial({ map: textTexture((g, w, h) => {
+            g.fillStyle = '#0b0c0e'; g.fillRect(0, 0, w, h);
+            g.fillStyle = '#f4f8ff'; g.shadowColor = '#cfe6ff'; g.shadowBlur = 18;
+            for (let k = 0; k < 7; k++) { g.beginPath(); g.arc(w * (0.15 + k * 0.117), h / 2, 13, 0, 7); g.fill(); }
+          }, 256, 128) });
+          const off = new THREE.MeshBasicMaterial({ map: textTexture((g, w, h) => {
+            g.fillStyle = '#0b0c0e'; g.fillRect(0, 0, w, h);
+            g.fillStyle = '#2a2d31';
+            for (let k = 0; k < 7; k++) { g.beginPath(); g.arc(w * (0.15 + k * 0.117), h / 2, 13, 0, 7); g.fill(); }
+            g.fillStyle = '#ff3a2a'; g.shadowColor = '#ff3a2a'; g.shadowBlur = 16; g.beginPath(); g.arc(w / 2, h / 2, 16, 0, 7); g.fill();
+          }, 256, 128) });
+          const face = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 0.36), on); face.position.z = 0.105; grp.add(face);
+          scene.add(grp);
+          instances(new THREE.BoxGeometry(0.06, 2.0, 0.06), M.pole, [{ u: su, l: sl, h: 4.6 }]);
+          routeInd.push({ u: su, set(v) { face.material = v ? on : off; } });
+        }
+      }
+    }
+
+    // 모니터 화면 그리기 (값이 바뀔 때만 갱신)
+    function drawMonitor(mon, s) {
+      let status = '접근', col = '#9fb3c8', val = '', unit = '';
+      if (s.err != null) {
+        const e = s.err;
+        if (Math.abs(e) <= 0.5) { status = '양호'; col = '#3dff8a'; }
+        else if (e < 0) { status = '미달'; col = '#ffd23d'; }
+        else { status = '초과'; col = '#ff4b3d'; }
+        if (Math.abs(e) < 10) { val = `${e >= 0 ? '+' : '-'}${String(Math.abs(Math.round(e * 1000))).padStart(3, '0')}`; unit = 'mm'; }
+        else { val = `${e >= 0 ? '+' : '-'}${Math.abs(e).toFixed(1)}`; unit = 'm'; }
+        if (!s.stopped && e < -0.5) { status = s.err < -10 ? '접근' : '미달'; }
+      }
+      const key = status + val + (s.doors ? 'D' : '');
+      if (key === mon.last) return;
+      mon.last = key;
+      const g = mon.cv.getContext('2d'), w = mon.cv.width, h = mon.cv.height;
+      g.fillStyle = '#05070a'; g.fillRect(0, 0, w, h);
+      // CCTV (승강장 영상)
+      const cx = 8, cy = 30, cw = 380, ch = h - 38;
+      const gr = g.createLinearGradient(0, cy, 0, cy + ch); gr.addColorStop(0, '#2b3036'); gr.addColorStop(1, '#5c5e5f');
+      g.fillStyle = gr; g.fillRect(cx, cy, cw, ch);
+      g.fillStyle = '#8c8e8c'; g.beginPath(); g.moveTo(cx, cy + ch); g.lineTo(cx + cw, cy + ch); g.lineTo(cx + cw * 0.62, cy + ch * 0.38); g.lineTo(cx + cw * 0.52, cy + ch * 0.38); g.fill();
+      g.strokeStyle = '#d8c23a'; g.lineWidth = 3; g.beginPath(); g.moveTo(cx + cw * 0.2, cy + ch); g.lineTo(cx + cw * 0.53, cy + ch * 0.4); g.stroke();
+      for (let k = 0; k < 6; k++) {
+        const t = k / 6, x0 = cx + cw * (0.05 + 0.08 * t), x = x0 + (cx + cw * 0.5 - x0) * t * 0.9;
+        g.fillStyle = s.doors ? '#1b2a33' : '#7fa6b8'; g.globalAlpha = 0.8;
+        g.fillRect(x, cy + ch * (0.22 + 0.15 * t), 34 * (1 - t * 0.8), ch * (0.55 - 0.35 * t));
+        g.globalAlpha = 1;
+      }
+      g.fillStyle = '#e8e8e8'; g.font = '700 16px monospace'; g.fillText('CAM1 ' + mon.st.name, cx + 6, cy + 18);
+      // 정위치 표시
+      g.fillStyle = '#123a7a'; g.fillRect(0, 0, w, 26);
+      g.fillStyle = '#fff'; g.font = `700 18px ${FONT}`; g.textBaseline = 'middle'; g.textAlign = 'left';
+      g.fillText(`${mon.st.name}  승강장 안전문`, 10, 14);
+      g.textAlign = 'center';
+      g.fillStyle = '#e8eef4'; g.font = `700 20px ${FONT}`; g.fillText('정위치', 515, 52);
+      g.fillStyle = col; g.font = `900 64px ${FONT}`; g.fillText(status, 515, 112);
+      g.fillStyle = col; g.font = '700 46px monospace'; g.fillText(val, 515, 182);
+      g.fillStyle = '#9fb3c8'; g.font = '700 20px monospace'; g.fillText(unit, 515, 220);
+      mon.tex.needsUpdate = true;
     }
 
     // ───── 표지 ─────
@@ -463,7 +548,7 @@ RS.World = (function () {
       });
     }
 
-    return { scene, frame, point, stationWiden, inTunnel: inT, tunnel: C.tunnel, leader, sky, dispose };
+    return { scene, frame, point, stationWiden, inTunnel: inT, tunnel: C.tunnel, leader, sky, dispose, monitors, routeInd };
   }
 
   return { build };

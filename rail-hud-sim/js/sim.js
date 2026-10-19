@@ -72,7 +72,7 @@ RS.Sim = (function () {
         case 'call': this.ackCall(); break;
         case 'auto':
           this.auto = !this.auto;
-          this.flash(this.auto ? '자동운전 시작 — 교재 기본 운전 취급 그대로 수행' : '자동운전 해제', this.auto ? '#5fe3ff' : '#ffc04d', 2.5);
+          this.flash(this.auto ? '자동운전 시작' : '자동운전 해제', this.auto ? '#5fe3ff' : '#ffc04d', 2.5);
           break;
       }
       if (a.startsWith('brake') || a.startsWith('power') || a === 'eb') this.events.push('notch');
