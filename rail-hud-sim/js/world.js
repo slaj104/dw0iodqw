@@ -354,17 +354,20 @@ RS.World = (function () {
     for (const [a, b] of tunnelRanges) {
       chunks(a, b, 2, tunnelProfile, M.tunnelB, 300, 0.22, 0.22);
       chunks(a, b, 2, (u) => { const p = tunnelProfile(u), L = p[0][0], R = p[p.length - 1][0]; return [0, 0.08, 0.25, 0.5, 0.75, 0.92, 1].map(f => [L + (R - L) * f, -0.38]); }, M.concreteB, 400, 0.25, 0.25);
+      // 꽈배기 경계에서 설비가 반대쪽 벽으로 옮겨가므로 구간을 끊어서 그림 (선로를 가로지르지 않게)
+      const cuts = [T.start, T.end].filter(x => x > a && x < b).sort((x, y) => x - y);
+      const subs = []; { let p0 = a; for (const c of cuts) { subs.push([p0, c - 4]); p0 = c + 4; } subs.push([p0, b]); }
       // 터널 설비: 대피통로(상대선 반대쪽 벽), 케이블 트레이, 소화 배관 — 역 구간에서는 접힘
       const outer = (u) => { const o = C.otherOffset(u); return o !== null && o > 0 ? -1 : 1; }; // 대피통로 쪽
       const wallX = (u, s) => { const p = tunnelProfile(u); return s < 0 ? p[0][0] : p[p.length - 1][0]; };
       const fold = (u) => 1 - stationWidenRaw(u);
-      chunks(a, b, 4, (u) => { const s = outer(u), W = wallX(u, s), k = fold(u) * 0.85; return [[W - s * 0.02, 0.62 * fold(u) - 0.38 * (1 - fold(u))], [W - s * k, 0.62 * fold(u) - 0.38 * (1 - fold(u))], [W - s * k, -0.38]]; }, M.concreteB, 400, 0.4, 0.4);
-      chunks(a, b, 4, (u) => { const s = outer(u), W = wallX(u, s), k = fold(u) * 0.85; return [[W - s * k, 0.66 * fold(u)], [W - s * k, 1.6 * fold(u)]]; }, M.darkB, 500);
+      for (const [sa, sb] of subs) chunks(sa, sb, 4, (u) => { const s = outer(u), W = wallX(u, s), k = fold(u) * 0.85; return [[W - s * 0.02, 0.62 * fold(u) - 0.38 * (1 - fold(u))], [W - s * k, 0.62 * fold(u) - 0.38 * (1 - fold(u))], [W - s * k, -0.38]]; }, M.concreteB, 400, 0.4, 0.4);
+      for (const [sa, sb] of subs) chunks(sa, sb, 4, (u) => { const s = outer(u), W = wallX(u, s), k = fold(u) * 0.85; return [[W - s * k, 0.66 * fold(u)], [W - s * k, 1.6 * fold(u)]]; }, M.darkB, 500);
       for (const hh of [1.55, 2.05]) {
-        chunks(a, b, 4, (u) => { const s = -outer(u), W = wallX(u, s), k = fold(u); return [[W - s * 0.02, hh * k + 0.9 * (1 - k)], [W - s * 0.38 * k, hh * k + 0.9 * (1 - k)], [W - s * 0.38 * k, (hh + 0.12) * k + 0.9 * (1 - k)]]; }, M.darkB, 500);
+        for (const [sa, sb] of subs) chunks(sa, sb, 4, (u) => { const s = -outer(u), W = wallX(u, s), k = fold(u); return [[W - s * 0.02, hh * k + 0.9 * (1 - k)], [W - s * 0.38 * k, hh * k + 0.9 * (1 - k)], [W - s * 0.38 * k, (hh + 0.12) * k + 0.9 * (1 - k)]]; }, M.darkB, 500);
       }
       const pipeMat = baked(ph({ color: 0x7a4a44, shininess: 30 }));
-      chunks(a, b, 4, (u) => { const s = -outer(u), W = wallX(u, s), k = fold(u), cx = W - s * 0.22 * k, cy = 2.75; const r = 0.07 * k + 0.001; const pts = []; for (let q = 0; q <= 8; q++) { const an = q / 8 * Math.PI * 2; pts.push([cx + Math.cos(an) * r, cy + Math.sin(an) * r]); } return pts; }, pipeMat, 500);
+      for (const [sa, sb] of subs) chunks(sa, sb, 4, (u) => { const s = -outer(u), W = wallX(u, s), k = fold(u), cx = W - s * 0.22 * k, cy = 2.75; const r = 0.07 * k + 0.001; const pts = []; for (let q = 0; q <= 8; q++) { const an = q / 8 * Math.PI * 2; pts.push([cx + Math.cos(an) * r, cy + Math.sin(an) * r]); } return pts; }, pipeMat, 500);
       // 비상구 유도등 (녹색, 50 m 간격)
       const exitTex = textTexture((g, w, h) => {
         g.fillStyle = '#0a9a4a'; g.fillRect(0, 0, w, h);
