@@ -47,13 +47,14 @@ RS.Sim = (function () {
     input(a, n) {
       const V = this.veh;
       if (this.finished) return;
-      if (['powerUp', 'powerDown', 'power4', 'brakeUp', 'brakeDown', 'brakeSet', 'eb'].includes(a) && this.auto && !this.fromAuto) {
+      if (['powerUp', 'powerDown', 'power4', 'powerSet', 'brakeUp', 'brakeDown', 'brakeSet', 'eb'].includes(a) && this.auto && !this.fromAuto) {
         this.auto = false; this.flash('자동운전 해제 (수동 개입)', '#ffc04d', 2.5);
       }
       switch (a) {
         case 'powerUp': V.power = Math.min(4, V.power + 1); break;
         case 'powerDown': V.power = Math.max(0, V.power - 1); break;
         case 'power4': V.power = 4; break;
+        case 'powerSet': V.power = Math.max(0, Math.min(4, n)); break;
         case 'brakeUp': V.brake = Math.min(8, V.brake + 1); break;
         case 'brakeDown': V.brake = Math.max(0, V.brake - 1); break;
         case 'brakeSet': V.brake = n; break;

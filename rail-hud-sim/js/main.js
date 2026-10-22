@@ -113,15 +113,107 @@
     else if (K === 'h') sim.input('horn');
     else if (K === 'b') sim.input('buzzer');
     else if (K === 'p') sim.input('auto');
-    else if (K === 'g') { opts.guide = !opts.guide; sim.flash(opts.guide ? 'HUD 운전 가이드 켬' : 'HUD 운전 가이드 끔 (비교 시연)', null, 2); }
-    else if (K === 'u') { opts.hud = !opts.hud; }
-    else if (K === 'm') sim.flash(RS.Audio.toggleMute() ? '소리 끔' : '소리 켬', null, 1.5);
-    else if (K === 'v') { opts.ann = RS.Audio.toggleAnn(); sim.flash(opts.ann ? '안내방송 켬' : '안내방송 끔', null, 1.5); }
+    else if (K === 'g') toggle.guide();
+    else if (K === 'u') toggle.hud();
+    else if (K === 'm') toggle.mute();
+    else if (K === 'v') toggle.ann();
     else if (k === 'Escape') showMenu();
     else used = false;
     if (used) e.preventDefault();
   });
+  let muted = false;
+  const toggle = {
+    guide() { opts.guide = !opts.guide; sim.flash(opts.guide ? 'HUD 운전 가이드 켬' : 'HUD 운전 가이드 끔 (비교 시연)', null, 2); },
+    hud() { opts.hud = !opts.hud; },
+    mute() { muted = RS.Audio.toggleMute(); sim.flash(muted ? '소리 끔' : '소리 켬', null, 1.5); },
+    ann() { opts.ann = RS.Audio.toggleAnn(); sim.flash(opts.ann ? '안내방송 켬' : '안내방송 끔', null, 1.5); },
+  };
   window.addEventListener('wheel', (e) => { if (sim && running && !sim.finished) sim.input(e.deltaY > 0 ? 'brakeUp' : 'brakeDown'); }, { passive: true });
+
+  // ───── 터치 조작 (설정에서 켜고 끔) ─────
+  //  계기판 오른쪽 핸들 표시창을 누르거나 위아래로 끌면 해당 노치로, 옆 버튼판으로 나머지 취급
+  const pad = document.getElementById('touchPad'), dashCv = document.getElementById('dash'), optTouch = document.getElementById('optTouch');
+  const coarse = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+  const touchDev = coarse || navigator.maxTouchPoints > 0;
+  let touchOn = false;
+  try { const v = localStorage.getItem('rs.touch'); optTouch.checked = v === null ? touchDev : v === '1'; } catch (e) { optTouch.checked = touchDev; }
+  if (coarse) document.getElementById('optQ').value = '0'; // 태블릿은 기본 그래픽 '낮음'
+  function placePad() {
+    const Ly = RS.HUD.layout();
+    if (!Ly.btn) return;
+    const [x, y, w, h] = Ly.btn;
+    Object.assign(pad.style, { left: x + 'px', top: (Ly.H - Ly.DH + y) + 'px', width: w + 'px', height: h + 'px' });
+  }
+  function setTouch(on) {
+    touchOn = on;
+    document.body.classList.toggle('touch', on);
+    pad.classList.toggle('hidden', !on);
+    RS.HUD.setTouch(on);
+    onResize(); placePad();
+  }
+  optTouch.addEventListener('change', () => {
+    setTouch(optTouch.checked);
+    try { localStorage.setItem('rs.touch', optTouch.checked ? '1' : '0'); } catch (e) {}
+  });
+  window.addEventListener('resize', placePad);
+  setTouch(optTouch.checked);
+
+  const padAct = {
+    auto: () => sim.input('auto'), doors: () => sim.input('doors'), call: () => sim.input('call'), horn: () => sim.input('horn'),
+    eb: () => sim.input('eb'), ads: () => sim.input('ads'), regen: () => sim.input('regen'), cgs: () => sim.input('cgs'),
+    buzzer: () => sim.input('buzzer'), release: () => sim.input('brakeSet', 0),
+    guide: toggle.guide, hud: toggle.hud, ann: toggle.ann, mute: toggle.mute, menu: () => showMenu(),
+  };
+  const padBtn = {};
+  pad.querySelectorAll('button').forEach(b => {
+    padBtn[b.dataset.a] = b;
+    b.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (!sim || !running || sim.finished) return;
+      padAct[b.dataset.a]();
+    });
+  });
+  pad.addEventListener('contextmenu', e => e.preventDefault());
+  function updatePad() {
+    if (!touchOn || !sim) return;
+    const V = sim.veh, set = (k, cls, on) => padBtn[k].classList.toggle(cls, !!on);
+    const label = (k, t) => { if (padBtn[k].textContent !== t) padBtn[k].textContent = t; };
+    set('auto', 'on', sim.auto); label('auto', sim.auto ? '자동 ON' : '자동운전');
+    set('doors', 'on', sim.doors); label('doors', sim.doors ? '문 닫기' : '문 열기');
+    set('call', 'warn', sim.activeCalls().length);
+    set('eb', 'on', V.brake === 8);
+    label('ads', `교직 ${V.ads}`);
+    set('regen', 'on', V.regenCut);
+    label('cgs', `CgS ${sim.atc.mode}`);
+    set('guide', 'on', opts.guide); set('hud', 'on', opts.hud); set('ann', 'on', opts.ann);
+    set('mute', 'on', !muted); label('mute', muted ? '소리 꺼짐' : '소리');
+  }
+
+  // 핸들 표시창: 누르거나 끌어서 노치 선택 (마우스로도 가능)
+  let drag = null;
+  function applyHandle(r) {
+    if (!r || !sim || !running || sim.finished) return;
+    if (r.col === 'power') { if (r.n !== sim.veh.power) sim.input('powerSet', r.n); }
+    else if (r.n === 8) { if (sim.veh.brake !== 8) sim.input('eb'); }
+    else if (r.n !== sim.veh.brake) sim.input('brakeSet', r.n);
+  }
+  const dashXY = (e) => { const b = dashCv.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; };
+  dashCv.addEventListener('pointerdown', (e) => {
+    const r = RS.HUD.handleHit(...dashXY(e));
+    if (!r) return;
+    e.preventDefault();
+    drag = { id: e.pointerId, col: r.col };
+    try { dashCv.setPointerCapture(e.pointerId); } catch (err) {}
+    applyHandle(r);
+  });
+  dashCv.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const [x, y] = dashXY(e);
+    applyHandle(RS.HUD.handleHit(x, y, drag.col));
+  });
+  const endDrag = (e) => { if (drag && e.pointerId === drag.id) drag = null; };
+  dashCv.addEventListener('pointerup', endDrag);
+  dashCv.addEventListener('pointercancel', endDrag);
 
   // ───── 투영 ─────
   const _v = new THREE.Vector3();
@@ -186,6 +278,7 @@
     updateStationDevices(dt);
     renderer.render(scene, camera);
     drawHUD();
+    updatePad();
     RS.Audio.update(dt, { vK: sim.vK, tAct: sim.st.tAct, bAct: sim.st.bAct, tunnel: world.inTunnel(sim.u), cm: sim.veh.cm, regen: !sim.veh.regenCut, alarm: sim.atc.warn || sim.atc.braking });
     if (sim.finished && running) { running = false; setTimeout(showResult, 1200); }
   }
@@ -320,7 +413,7 @@
   selD.addEventListener('change', fillStations);
   fillStations();
 
-  function showMenu() { running = false; RS.Audio.stopAnn(); menu.classList.remove('hidden'); result.classList.add('hidden'); }
+  function showMenu() { running = false; document.body.classList.remove('playing'); RS.Audio.stopAnn(); menu.classList.remove('hidden'); result.classList.add('hidden'); }
   document.getElementById('startBtn').addEventListener('click', async () => {
     RS.Audio.init();
     await fontReady; await modelsReady;
@@ -336,6 +429,11 @@
       auto: document.getElementById('optAuto').checked,
     });
     menu.classList.add('hidden');
+    document.body.classList.add('playing');
+    if (touchOn && !document.fullscreenElement) { // 태블릿: 주소창 등을 숨기려 전체화면 시도
+      const el = document.documentElement, fs = el.requestFullscreen || el.webkitRequestFullscreen;
+      try { const p = fs && fs.call(el); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+    }
     running = true; last = performance.now();
   });
   document.getElementById('againBtn').addEventListener('click', showMenu);

@@ -3,6 +3,7 @@ window.RS = window.RS || {};
 
 RS.HUD = (function () {
   let cab, hud, dash, gc, gh, gd, W = 0, H = 0, DH = 0, dpr = 1, ws = null;
+  let touch = false, L = null; // 터치 모드: 계기판에 터치 버튼 영역을 두고 핸들 칸을 넓힘
   const COL = '#72ffb0', DIM = 'rgba(114,255,176,0.6)', AMBER = '#ffc04d', RED = '#ff5050', CYAN = '#5fe3ff', WHITE = '#f2fff7';
   const FONT = '"Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
   const MONO = 'Consolas, "D2Coding", "Roboto Mono", monospace';
@@ -13,12 +14,19 @@ RS.HUD = (function () {
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     W = window.innerWidth; H = window.innerHeight;
-    DH = Math.round(Math.max(170, H * 0.27));
+    DH = Math.round(Math.max(touch ? 200 : 170, H * (touch ? 0.31 : 0.27)));
     for (const c of [cab, hud]) { c.width = W * dpr; c.height = H * dpr; c.style.width = W + 'px'; c.style.height = H + 'px'; }
     dash.width = W * dpr; dash.height = DH * dpr; dash.style.width = W + 'px'; dash.style.height = DH + 'px';
     const bot = H - DH - H * 0.012;
     ws = { top: H * 0.03, bot, tl: W * 0.07, tr: W * 0.93, bl: W * 0.02, br: W * 0.98 };
     ws.cx = W / 2; ws.h = ws.bot - ws.top; ws.w = ws.br - ws.bl;
+    const pad = 12, h = DH - pad * 2;
+    const mw = touch ? Math.min(260, W * 0.2) : Math.min(300, W * 0.23);
+    const cw = touch ? Math.min(220, W * 0.18) : Math.min(170, W * 0.14);
+    const bw = touch ? Math.min(420, W * 0.34) : 0;
+    L = { mon: [pad, pad, mw, h], hand: [W - pad - cw, pad, cw, h],
+      btn: touch ? [W - pad * 2 - cw - bw, pad, bw, h] : null,
+      curve: [pad * 2 + mw, pad, W - mw - cw - pad * 4 - (touch ? bw + pad : 0), h] };
     drawCab();
   }
 
@@ -286,12 +294,23 @@ RS.HUD = (function () {
     const grd = g.createLinearGradient(0, 0, 0, DH); grd.addColorStop(0, '#30363d'); grd.addColorStop(1, '#15181c');
     g.fillStyle = grd; g.fillRect(0, 0, W, DH);
     g.fillStyle = '#0d0f12'; g.fillRect(0, 0, W, 4);
-    const pad = 12, h = DH - pad * 2;
-    const mw = Math.min(300, W * 0.23), cw = Math.min(170, W * 0.14);
-    monitor(g, pad, pad, mw, h, d);
-    handles(g, W - pad - cw, pad, cw, h, d);
-    runCurve(g, pad * 2 + mw, pad, W - mw - cw - pad * 4, h, d, chart);
+    monitor(g, ...L.mon, d);
+    handles(g, ...L.hand, d);
+    runCurve(g, ...L.curve, d, chart);
   }
+  // 핸들 표시창 터치/클릭 → { col: 'power'|'brake', n } (n: 동력 0~4, 제동 0~7, 8=비상). x,y 는 계기판 기준 좌표
+  function handleHit(px, py, col) {
+    const [x, y, w, h] = L.hand, half = w / 2;
+    if (!col) {
+      if (px < x || px > x + w || py < y || py > y + h) return null;
+      col = px < x + half ? 'power' : 'brake';
+    }
+    const rows = col === 'power' ? 5 : 9, lh = (h - 26) / rows;
+    const i = Math.max(0, Math.min(rows - 1, Math.floor((py - y - 22) / lh)));
+    return { col, n: col === 'power' ? 4 - i : i };
+  }
+  function setTouch(on) { touch = !!on; resize(); }
+  function layout() { return { W, H, DH, btn: L.btn, hand: L.hand }; }
   function screen(g, x, y, w, h) { g.fillStyle = '#05080a'; rr(g, x, y, w, h, 8); g.fill(); g.strokeStyle = '#4a525b'; g.lineWidth = 2; g.stroke(); }
 
   function monitor(g, x, y, w, h, d) {
@@ -381,5 +400,5 @@ RS.HUD = (function () {
     }
   }
 
-  return { init, resize, draw, drawDash, get ws() { return ws; }, get size() { return { W, H, DH }; } };
+  return { init, resize, draw, drawDash, setTouch, layout, handleHit, get ws() { return ws; }, get size() { return { W, H, DH }; } };
 })();

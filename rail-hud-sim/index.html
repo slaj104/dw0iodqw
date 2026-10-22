@@ -2,7 +2,9 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>과천선 HUD 운전 시뮬레이터</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -11,6 +13,12 @@
 <canvas id="hud"></canvas>
 <canvas id="cab"></canvas>
 <canvas id="dash"></canvas>
+<div id="touchPad" class="hidden">
+  <button data-a="auto" class="wide">자동운전</button><button data-a="doors">문 열기</button><button data-a="call">환호</button><button data-a="horn">기적</button><button data-a="eb" class="red">비상</button>
+  <button data-a="ads">교직</button><button data-a="regen">회생차단</button><button data-a="cgs">CgS</button><button data-a="buzzer">버저</button><button data-a="release">완해</button>
+  <button data-a="guide">가이드</button><button data-a="hud">HUD</button><button data-a="ann">방송</button><button data-a="mute">소리</button><button data-a="menu">메뉴</button>
+</div>
+<div id="rotate">가로 화면으로 돌려 주세요 ↻</div>
 
 <div id="menu" class="panel">
   <h1>과천선 운전 시뮬레이터 <span>전면유리 HUD · 운전 가이드</span></h1>
@@ -26,7 +34,8 @@
     <label>출발역 <select id="startSt"></select></label>
     <label>도착역 <select id="endSt"></select></label>
     <label class="chk"><input id="optGuide" type="checkbox" checked> HUD 운전 가이드 (기본 운전 취급 + 실시간 보정)</label>
-    <label class="chk"><input id="optAuto" type="checkbox"> 자동운전으로 시작 (P 키로 언제든 켜고 끔)</label>
+    <label class="chk"><input id="optTouch" type="checkbox"> 터치 조작 (태블릿·터치스크린: 화면 버튼 + 핸들 표시창 끌어서 조작)</label>
+    <label class="chk"><input id="optAuto" type="checkbox"> 자동운전으로 시작 (P 키·터치 '자동운전' 버튼으로 언제든 켜고 끔)</label>
     <label class="chk"><input id="optAnn" type="checkbox" checked> 안내방송 (TTS 음성 + 자막, V 키로 켜고 끔)</label>
     <label class="chk"><input id="optLeader" type="checkbox"> 선행열차 운행 (ADU 40모드·STOP 발생 — 교재 5.6)</label>
   </div>
@@ -40,6 +49,7 @@
     <tr><td>H · B</td><td>기적 · 발차 버저</td></tr>
     <tr><td>P · G · U</td><td>자동운전 · 가이드 표시 · HUD 전체 켜기/끄기</td></tr>
     <tr><td>V · M · Esc</td><td>안내방송 · 소리 · 메뉴</td></tr>
+    <tr><td>터치</td><td>오른쪽 아래 핸들 표시창(동력·제동)을 누르거나 위아래로 끌어 노치 선택, 옆 버튼으로 자동운전·출입문·환호·비상 등 (설정에서 켜기)</td></tr>
   </table>
   <button id="startBtn">운행 시작</button>
   <p class="small">취급 기준: 제2종 철도차량운전면허 표준교재 「기능교재」 4장(기본 운전 취급법), 1.2(기본 운전 취급), 5.6(ADU 40모드), 8장(속도 제한).
