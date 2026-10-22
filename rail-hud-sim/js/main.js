@@ -117,6 +117,7 @@
     else if (K === 'u') toggle.hud();
     else if (K === 'm') toggle.mute();
     else if (K === 'v') toggle.ann();
+    else if (K === 'd') setPanel(!panelOn);
     else if (k === 'Escape') showMenu();
     else used = false;
     if (used) e.preventDefault();
@@ -138,8 +139,24 @@
   let touchOn = false;
   try { const v = localStorage.getItem('rs.touch'); optTouch.checked = v === null ? touchDev : v === '1'; } catch (e) { optTouch.checked = touchDev; }
   if (coarse) document.getElementById('optQ').value = '0'; // 태블릿은 기본 그래픽 '낮음'
+  // 하단 조작패널: 기본은 내려서 전면 화면만. 메뉴 체크박스 · D 키 · ▲ 버튼으로 켜고 끔 (브라우저에 저장)
+  const optPanel = document.getElementById('optPanel'), panelBtn = document.getElementById('panelBtn');
+  let panelOn = false;
+  try { panelOn = localStorage.getItem('rs.panel') === '1'; } catch (e) {}
+  function setPanel(on) {
+    panelOn = !!on; optPanel.checked = panelOn;
+    try { localStorage.setItem('rs.panel', panelOn ? '1' : '0'); } catch (e) {}
+    RS.HUD.setPanel(panelOn);
+    pad.classList.toggle('hidden', !touchOn || !panelOn);
+    onResize(); placePad();
+  }
+  optPanel.addEventListener('change', () => setPanel(optPanel.checked));
+  panelBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); setPanel(!panelOn); });
   function placePad() {
     const Ly = RS.HUD.layout();
+    panelBtn.classList.remove('hidden');
+    panelBtn.textContent = panelOn ? '▼ 패널 내리기' : '▲ 조작패널';
+    panelBtn.style.bottom = Ly.DH + 'px';
     if (!Ly.btn) return;
     const [x, y, w, h] = Ly.btn;
     Object.assign(pad.style, { left: x + 'px', top: (Ly.H - Ly.DH + y) + 'px', width: w + 'px', height: h + 'px' });
@@ -147,9 +164,8 @@
   function setTouch(on) {
     touchOn = on;
     document.body.classList.toggle('touch', on);
-    pad.classList.toggle('hidden', !on);
     RS.HUD.setTouch(on);
-    onResize(); placePad();
+    setPanel(panelOn);
   }
   optTouch.addEventListener('change', () => {
     setTouch(optTouch.checked);

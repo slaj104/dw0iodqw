@@ -18,6 +18,7 @@
   <button data-a="ads">교직</button><button data-a="regen">회생차단</button><button data-a="cgs">CgS</button><button data-a="buzzer">버저</button><button data-a="release">완해</button>
   <button data-a="guide">가이드</button><button data-a="hud">HUD</button><button data-a="ann">방송</button><button data-a="mute">소리</button><button data-a="menu">메뉴</button>
 </div>
+<button id="panelBtn" class="hidden">▲ 조작패널</button>
 <div id="rotate">가로 화면으로 돌려 주세요 ↻</div>
 
 <div id="menu" class="panel">
@@ -34,6 +35,7 @@
     <label>출발역 <select id="startSt"></select></label>
     <label>도착역 <select id="endSt"></select></label>
     <label class="chk"><input id="optGuide" type="checkbox" checked> HUD 운전 가이드 (기본 운전 취급 + 실시간 보정)</label>
+    <label class="chk"><input id="optPanel" type="checkbox"> 하단 조작패널 표시 (TCMS·운전곡선·핸들·터치 버튼 — 운행 중 D 키나 ▲ 버튼으로 켜고 끔)</label>
     <label class="chk"><input id="optTouch" type="checkbox"> 터치 조작 (태블릿·터치스크린: 화면 버튼 + 핸들 표시창 끌어서 조작)</label>
     <label class="chk"><input id="optAuto" type="checkbox"> 자동운전으로 시작 (P 키·터치 '자동운전' 버튼으로 언제든 켜고 끔)</label>
     <label class="chk"><input id="optAnn" type="checkbox" checked> 안내방송 (TTS 음성 + 자막, V 키로 켜고 끔)</label>
@@ -49,6 +51,7 @@
     <tr><td>H · B</td><td>기적 · 발차 버저</td></tr>
     <tr><td>P · G · U</td><td>자동운전 · 가이드 표시 · HUD 전체 켜기/끄기</td></tr>
     <tr><td>V · M · Esc</td><td>안내방송 · 소리 · 메뉴</td></tr>
+    <tr><td>D</td><td>하단 조작패널 올리기/내리기 (내리면 전면 화면만)</td></tr>
     <tr><td>터치</td><td>오른쪽 아래 핸들 표시창(동력·제동)을 누르거나 위아래로 끌어 노치 선택, 옆 버튼으로 자동운전·출입문·환호·비상 등 (설정에서 켜기)</td></tr>
   </table>
   <button id="startBtn">운행 시작</button>
